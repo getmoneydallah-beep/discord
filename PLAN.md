@@ -2,7 +2,7 @@
 
 The goal is a Discord-style community chat app built for Arabic first, shipped as a **web app**, an **iOS app** and an **Android app** that share as much code as possible.
 
-> We need our own brand name. "Discord" is a trademark, so the stores will reject anything that uses it. The code calls the project `majlis` (مجلس) for now. Any name works; this is only a placeholder.
+> **Decided:** the brand is **Majlis (مجلس)**, the main market is **Saudi Arabia**, v1 is **text first**, and the API is hosted on **Fly.io**. See the README for how to run and deploy what is built so far.
 
 ---
 
@@ -55,9 +55,9 @@ majlis/                     (pnpm + Turborepo monorepo)
 │   └── api/                Node.js (Fastify) + WebSocket gateway
 ├── packages/
 │   ├── shared/             types, zod schemas, permission logic
-│   ├── api-client/         typed REST + realtime client (used by web & mobile)
-│   ├── i18n/               ar / en translations, Arabic text utils (normalise, bidi)
-│   └── ui-tokens/          colors, spacing, typography (shared design system)
+│   ├── api-client/         typed REST + realtime client + shared zustand store (web & mobile)
+│   └── i18n/               ar / en translations, date & number formatting
+│   (design tokens and Arabic text utils live in shared/)
 └── infra/                  docker-compose for local dev, deploy configs
 ```
 
@@ -69,7 +69,7 @@ majlis/                     (pnpm + Turborepo monorepo)
 - **Redis** handles pub/sub between gateway instances, presence, typing state and rate limits.
 - **LiveKit** for voice and video in v2. It is an open-source WebRTC media server with React and React Native SDKs, run either on LiveKit Cloud or self-hosted.
 - **Expo Notifications** sends push through APNs (Apple) and FCM (Google) from one API.
-- **Auth:** Better-Auth (self-hosted, inside our API) or Clerk (managed). Recommended: Better-Auth, so we keep control of user data.
+- **Auth:** built into our API for now: email and password hashed with scrypt, plus 30-day JWTs. This keeps all user data in our own database, which matters for PDPL. Phone OTP comes next, since Saudi users expect it. It needs an SMS provider licensed for Saudi Arabia, such as Unifonic or Taqnyat.
 
 ---
 
@@ -90,7 +90,10 @@ majlis/                     (pnpm + Turborepo monorepo)
 
 **Total to launch the MVP: about $0–50 a month, plus $99 a year for Apple and $25 once for Google.**
 
-### Region and data residency
+### Region and data residency (main market: Saudi Arabia)
+- **Today:** Fly.io `fra`, Neon `aws-eu-central-1` and Upstash `eu-central-1`, all in Frankfurt. Fly has **no region in Saudi Arabia** or anywhere in the Gulf.
+- **PDPL:** the Saudi Personal Data Protection Law (enforced by the regulator, SDAIA) restricts sending personal data outside the Kingdom. Transfers are allowed under specific conditions, such as adequacy decisions or appropriate safeguards. **Get a legal review before public launch.** If data must stay in the Kingdom, move the API, Postgres and Redis to an in-Kingdom cloud: Google Cloud `me-central2` (Dammam), Oracle Cloud Jeddah or Riyadh, or a local provider such as STC Cloud. Everything ships as a Docker image with plain Postgres and Redis, so the move is a redeploy, not a rewrite. That move would mean leaving Fly and Neon, though Vercel and EAS can stay.
+
 - Most users will likely be in the Gulf, Egypt and the Levant, so we put the API and database **as close to the Middle East as possible**.
   - Start in **Frankfurt (eu-central)**, which Neon, Fly and Upstash all support. Latency to the Gulf is roughly 80–120 ms, which is fine for chat.
   - If we need in-country data or lower latency later, move the backend to **AWS me-central-1 (UAE)**, **AWS me-south-1 (Bahrain)** or **Google Cloud me-central2 (Dammam, KSA)**.
@@ -147,9 +150,20 @@ majlis/                     (pnpm + Turborepo monorepo)
 
 ---
 
-## 7. Decisions still open
-1. **Brand name** and domain.
-2. **Main target country.** This decides the hosting region and whether Saudi PDPL applies.
-3. **Voice in the MVP, or v2?** Recommended: v2. Text chat first, then voice.
-4. **Auth:** Better-Auth (self-hosted, recommended) or Clerk (managed, faster to set up).
-5. **Hosting accounts:** we already have Vercel, Neon and Cloudflare connected. We still need to decide between Fly.io and Railway for the API.
+## 7. Progress
+- [x] Phase 0: monorepo, CI, i18n, RTL design tokens
+- [x] Phase 1: auth, servers, invites, channels (web)
+- [x] Phase 2: real-time gateway, messages, edit and delete, replies, reactions, typing, presence, Arabic search
+- [x] Phase 3 (part): Expo app with auth, servers, channels, chat, invite deep links and settings. The iOS and Android JS bundles build.
+- [x] Phase 4 (part): roles, kick, ban, reports, account deletion, rate limits
+- [ ] Attachments (Cloudflare R2 presigned uploads)
+- [ ] Push notifications (Expo, APNs and FCM)
+- [ ] Direct messages
+- [ ] Phone OTP login (Saudi SMS provider)
+- [ ] Moderation dashboard for reports, plus an Arabic profanity filter
+- [ ] Domain, production deploy, TestFlight and Play internal testing
+
+## 8. Decisions still open
+1. **Domain:** `majlis.app` is a placeholder in the configs. Check availability and buy it.
+2. **PDPL legal review**, to decide whether we must move to in-Kingdom hosting before launch.
+3. **SMS provider** for phone OTP: Unifonic or Taqnyat.

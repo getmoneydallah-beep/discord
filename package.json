@@ -1,0 +1,20 @@
+{
+  "name": "majlis",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "turbo run dev --parallel --filter=@majlis/api --filter=@majlis/web",
+    "dev:api": "pnpm --filter @majlis/api dev",
+    "dev:web": "pnpm --filter @majlis/web dev",
+    "dev:mobile": "pnpm --filter @majlis/mobile start",
+    "db:migrate": "pnpm --filter @majlis/api db:migrate",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.10",
+    "typescript": "~5.9.3"
+  }
+}

@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* Design tokens (mirror packages/shared/src/tokens.ts). Dark by default, like most chat apps. */
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-brand: #0f8a5f;
+  --color-brand-hover: #0b7350;
+  --color-accent: #c8a165;
+  --color-danger: #d9443b;
+  --color-success: #2da567;
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-rail: var(--rail);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+}
+
+:root {
+  --bg: #14171a;
+  --sidebar: #1b1f23;
+  --rail: #101316;
+  --surface: #22272c;
+  --surface-hover: #2a3036;
+  --border: #2f353b;
+  --text: #e8eaed;
+  --text-muted: #9aa3ab;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #ffffff;
+    --sidebar: #f4f5f6;
+    --rail: #e7e9eb;
+    --surface: #ffffff;
+    --surface-hover: #eef0f2;
+    --border: #dde1e4;
+    --text: #1b1f23;
+    --text-muted: #5f6870;
+    color-scheme: light;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  /* Arabic script needs a touch more line height than Latin. */
+  line-height: 1.6;
+}
+
+/* Each message picks its own direction; isolate so mixed Arabic/English doesn't reorder neighbours. */
+.bidi {
+  unicode-bidi: plaintext;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Mirror directional icons in RTL. */
+[dir="rtl"] .flip-rtl {
+  transform: scaleX(-1);
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
