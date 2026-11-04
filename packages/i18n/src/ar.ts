@@ -354,6 +354,10 @@ export const ar = {
     startTeaching: "تريد أن تُدرّس؟ أنشئ مجلسك وابدأ مجاناً.",
     account: "الحساب",
     saved: "تم الحفظ ✓",
+    theme: "المظهر",
+    themeLight: "فاتح",
+    themeDark: "داكن",
+    themeSystem: "حسب الجهاز",
   },
   serverMenu: {
     menu: "خيارات المجلس",

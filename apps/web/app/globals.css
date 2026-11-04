@@ -44,6 +44,19 @@
   }
 }
 
+/* Chosen in the theme toggle (data-theme on <html>, set before first paint in layout.tsx). */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --sidebar: #f4f5f6;
+  --rail: #e7e9eb;
+  --surface: #ffffff;
+  --surface-hover: #eef0f2;
+  --border: #dde1e4;
+  --text: #1b1f23;
+  --text-muted: #5f6870;
+  color-scheme: light;
+}
+
 html,
 body {
   height: 100%;

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PAID_TIERS, TEACHER_TIERS, TIERS, type TeacherTier } from "@majlis/shared";
 import { landing, type LandingLang } from "@/components/landing/content";
 import { SignedInRedirect } from "@/components/landing/SignedInRedirect";
+import { LandingHeader } from "@/components/landing/LandingHeader";
 
 type Props = { searchParams: Promise<{ lang?: string }> };
 
@@ -31,27 +32,10 @@ export default async function Landing({ searchParams }: Props) {
     <div dir={dir} lang={lang} className="min-h-full bg-bg text-fg">
       <SignedInRedirect />
 
-      {/* Nav */}
-      <header className="sticky top-0 z-30 border-b border-line/60 bg-bg/85 backdrop-blur">
-        <nav className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-          <Link href={lang === "ar" ? "/" : "/?lang=en"} className="text-2xl font-bold text-brand">
-            {lang === "ar" ? "مجلس" : "Majlis"}
-          </Link>
-          <div className="hidden flex-1 items-center gap-6 text-sm text-muted md:flex">
-            <a href="#features" className="hover:text-fg">{c.nav.features}</a>
-            <a href="#pricing" className="hover:text-fg">{c.nav.pricing}</a>
-            <a href="#faq" className="hover:text-fg">{c.nav.faq}</a>
-          </div>
-          <div className="flex flex-1 items-center justify-end gap-2 md:flex-none">
-            <Link href={other} className="rounded-md px-2 py-1 text-xs text-muted hover:text-fg">{c.nav.lang}</Link>
-            <Link href="/login" className="hidden rounded-lg px-3 py-2 text-sm font-medium hover:bg-surface-hover sm:block">{c.nav.login}</Link>
-            <Link href="/register" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">{c.nav.start}</Link>
-          </div>
-        </nav>
-      </header>
+      <LandingHeader lang={lang} />
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
+      <section className="relative -mt-[4.25rem] overflow-hidden pt-[4.25rem]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(15,138,95,0.25),transparent)]" />
         <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
           <div className="space-y-6">

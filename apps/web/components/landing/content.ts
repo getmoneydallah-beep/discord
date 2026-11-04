@@ -7,7 +7,7 @@ export const landing = {
       title: "مجلس · حوّل خبرتك إلى مجتمع يدفع",
       description: "منصة عربية للمعلمين والمدربين: دورات فيديو، دردشة مباشرة مع طلابك، وبيع الاشتراكات، كل ذلك في مكان واحد.",
     },
-    nav: { features: "المزايا", pricing: "الأسعار", faq: "الأسئلة", login: "تسجيل الدخول", start: "ابدأ مجاناً", lang: "English" },
+    nav: { features: "المزايا", pricing: "الأسعار", faq: "الأسئلة", login: "تسجيل الدخول", start: "ابدأ مجاناً", lang: "English", menu: "القائمة", themeLight: "الوضع الفاتح", themeDark: "الوضع الداكن", language: "اللغة" },
     hero: {
       badge: "منصة عربية أولاً",
       title: "حوّل خبرتك إلى مجتمع يدفع",
@@ -94,7 +94,7 @@ export const landing = {
       title: "Majlis · Turn your expertise into a paying community",
       description: "An Arabic-first platform for teachers and coaches: video courses, live chat with your students, and paid memberships in one place.",
     },
-    nav: { features: "Features", pricing: "Pricing", faq: "FAQ", login: "Log in", start: "Start free", lang: "العربية" },
+    nav: { features: "Features", pricing: "Pricing", faq: "FAQ", login: "Log in", start: "Start free", lang: "العربية", menu: "Menu", themeLight: "Light mode", themeDark: "Dark mode", language: "Language" },
     hero: {
       badge: "Arabic-first platform",
       title: "Turn your expertise into a paying community",

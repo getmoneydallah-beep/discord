@@ -16,10 +16,16 @@ export const viewport: Viewport = {
   themeColor: "#0f8a5f",
 };
 
+const THEME_SCRIPT = `try{var t=localStorage.getItem("majlis.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // Arabic + RTL by default; <Providers> switches lang/dir when the user picks English.
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/* Apply the saved light/dark choice before first paint (no flash). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="antialiased">
         <Providers>{children}</Providers>
       </body>

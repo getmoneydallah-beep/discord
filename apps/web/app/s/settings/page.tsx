@@ -9,6 +9,7 @@ import { actions, api, app, errorMessage, useApp, useLocale, useT } from "@/lib/
 import { Button, Input, cx } from "@/components/ui";
 import { PageShell } from "@/components/pay/PageShell";
 import { useOfferPrice } from "@/components/pay/shared";
+import { ThemeSegmented } from "@/components/ThemeToggle";
 
 /** Settings for everyone: profile, preferences, my subscriptions, teaching (only for teachers), account. */
 export default function SettingsPage() {
@@ -85,6 +86,10 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>{t("settingsPage.theme")}</span>
+            <ThemeSegmented labels={{ light: t("settingsPage.themeLight"), dark: t("settingsPage.themeDark"), system: t("settingsPage.themeSystem") }} />
           </div>
           <label className="flex items-center justify-between gap-3">
             <span>{t("settingsPage.easternDigits")}</span>

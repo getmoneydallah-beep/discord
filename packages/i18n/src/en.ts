@@ -358,6 +358,10 @@ export const en: Shape<typeof ar> = {
     startTeaching: "Want to teach? Create your majlis and start for free.",
     account: "Account",
     saved: "Saved ✓",
+    theme: "Appearance",
+    themeLight: "Light",
+    themeDark: "Dark",
+    themeSystem: "System",
   },
   serverMenu: {
     menu: "Majlis options",
