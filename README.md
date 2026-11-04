@@ -25,6 +25,7 @@ The web and mobile apps share the same API client and the same state store (`@ma
 - **Arabic-aware search**: alef forms (أ إ آ ا), ة/ه, ى/ي, diacritics (tashkeel) and the stretch character (tatweel) are normalised before indexing, so "اصدقاء" finds "أصدقاء".
 - Roles (owner, admin, member), kick, ban, and making or removing admins.
 - **Announcement channels** (📢): only the owner and admins post; members read and react. Every channel has a settings dialog (name, topic, who can post, free or paid).
+- **Landing page** at `/`, for logged-out visitors: server-rendered and indexable, Arabic with an English version at `/?lang=en`. It covers who Majlis is for, how it works, features, real product screenshots (`apps/web/public/landing/`), plan prices taken straight from `TIERS`, an FAQ and a final call to action. Signed-in users go straight to `/s`.
 - **Student experience:**
   - Invite links work logged out: they show the majlis (name, members, courses), then sign-up returns the student and joins automatically.
   - The username is optional at sign-up.
