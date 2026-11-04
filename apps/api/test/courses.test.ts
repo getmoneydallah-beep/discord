@@ -369,3 +369,14 @@ describe("announcement channels and channel settings", () => {
     expect((await api("POST", `/channels/${chatChannel}/messages`, student.token, { content: "x" })).status).toBe(201);
   });
 });
+
+describe("teacher dashboard summary", () => {
+  it("counts courses, lessons, members and offers for staff only", async () => {
+    const r = await api<{ courses: number; lessons: number; members: number; offers: number }>("GET", `/servers/${serverId}/summary`, owner.token);
+    expect(r.status).toBe(200);
+    expect(r.body.members).toBe(2);
+    expect(r.body.courses).toBeGreaterThan(0);
+    expect(r.body.offers).toBe(0);
+    expect((await api("GET", `/servers/${serverId}/summary`, student.token)).status).toBe(403);
+  });
+});

@@ -62,7 +62,15 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
         {channel && <ChannelHeaderTools channel={channel} />}
         {canEdit && (
           <Button variant={editing ? "primary" : "ghost"} onClick={() => setEditing((e) => !e)} className="py-1">
-            {editing ? `👁 ${t("course.studentView")}` : `✏️ ${t("course.edit")}`}
+            {editing ? (
+              <>
+                👁<span className="hidden sm:inline"> {t("course.studentView")}</span>
+              </>
+            ) : (
+              <>
+                ✏️<span className="hidden sm:inline"> {t("course.edit")}</span>
+              </>
+            )}
           </Button>
         )}
       </header>

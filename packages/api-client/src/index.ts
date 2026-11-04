@@ -7,6 +7,7 @@ import type {
   OfferInput,
   PaidTier,
   Sale,
+  ServerSummary,
   WhopConnectionInfo,
   ApiErrorBody,
   Course,
@@ -156,6 +157,8 @@ export class ApiClient {
   grantEntitlement = (serverId: string, userId: string, offerId: string) =>
     this.request<Entitlement>("POST", `/servers/${serverId}/entitlements`, { userId, offerId });
   revokeEntitlement = (id: string) => this.request<void>("DELETE", `/entitlements/${id}`);
+
+  serverSummary = (serverId: string) => this.request<ServerSummary>("GET", `/servers/${serverId}/summary`);
 
   // Teacher's own Whop account
   getWhopConnection = () => this.request<WhopConnectionInfo>("GET", "/whop/connection");

@@ -146,6 +146,7 @@ function Settings({ onClose }: { onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title={t("common.settings")}>
       <div className="space-y-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">👤 {t("settingsGroups.account")}</h3>
         <label className="flex items-center justify-between">
           <span>{t("common.language")}</span>
           <select
@@ -167,7 +168,8 @@ function Settings({ onClose }: { onClose: () => void }) {
           />
         </label>
 
-        <nav className="flex flex-col gap-1 border-t border-line pt-4 text-sm">
+        <h3 className="border-t border-line pt-4 text-xs font-semibold uppercase tracking-wide text-muted">🎓 {t("settingsGroups.teaching")}</h3>
+        <nav className="-mt-2 flex flex-col gap-1 text-sm">
           {[
             ["/s/billing", "⭐", t("pay.billing")],
             ["/s/whop", "🔗", t("pay.whop")],

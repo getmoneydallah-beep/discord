@@ -113,6 +113,22 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
     return channel;
   });
 
+  /** Numbers for the teacher dashboard's setup checklist (owner and admins). */
+  app.get<{ Params: { id: string } }>("/servers/:id/summary", async (req) => {
+    const role = await repo.requireMember(req.params.id, req.userId);
+    if (role === "member") throw forbidden();
+    const [row] = await sql<{ courses: number; lessons: number; members: number; subscribers: number; offers: number; paidChannels: number }[]>`
+      SELECT
+        (SELECT count(*)::int FROM channels WHERE server_id = ${req.params.id} AND type = 'course') AS courses,
+        (SELECT count(*)::int FROM lessons l JOIN channels c ON c.id = l.course_id WHERE c.server_id = ${req.params.id}) AS lessons,
+        (SELECT count(*)::int FROM server_members WHERE server_id = ${req.params.id}) AS members,
+        (SELECT count(DISTINCT user_id)::int FROM entitlements WHERE server_id = ${req.params.id}
+           AND status IN ('active', 'trialing', 'past_due') AND (ends_at IS NULL OR ends_at > now())) AS subscribers,
+        (SELECT count(*)::int FROM offers WHERE server_id = ${req.params.id} AND active) AS offers,
+        (SELECT count(*)::int FROM channels WHERE server_id = ${req.params.id} AND access = 'paid') AS paid_channels`;
+    return row;
+  });
+
   /** Channel settings: name, topic, who can post. */
   app.patch<{ Params: { id: string } }>("/channels/:id", async (req) => {
     const { channel, role } = await repo.channelAccess(req.params.id, req.userId);

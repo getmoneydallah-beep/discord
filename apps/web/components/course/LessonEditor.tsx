@@ -229,7 +229,28 @@ export function LessonEditor(props: {
           </div>
 
           {error && <p className="text-sm text-danger">{error}</p>}
-          <div className="sticky bottom-0 flex justify-end gap-2 bg-sidebar pt-2">
+          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-sidebar pt-3">
+            {lessonId && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-danger"
+                disabled={saving || uploading}
+                onClick={async () => {
+                  if (!confirm(t("course.confirmDelete"))) return;
+                  try {
+                    await api.deleteLesson(lessonId);
+                    await actions.loadCourse(course.id);
+                    onClose();
+                  } catch (err) {
+                    setError(errorMessage(err));
+                  }
+                }}
+              >
+                🗑️ {t("course.deleteLesson")}
+              </Button>
+            )}
+            <div className="flex-1" />
             <Button type="button" variant="ghost" onClick={onClose} disabled={uploading}>
               {t("common.cancel")}
             </Button>

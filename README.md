@@ -24,6 +24,8 @@ The web and mobile apps share the same API client and the same state store (`@ma
 - Message history loads older pages as you scroll up.
 - **Arabic-aware search**: alef forms (أ إ آ ا), ة/ه, ى/ي, diacritics (tashkeel) and the stretch character (tatweel) are normalised before indexing, so "اصدقاء" finds "أصدقاء".
 - Roles (owner, admin, member), kick, ban, and making or removing admins.
+- **Announcement channels** (📢): only the owner and admins post; members read and react. Every channel has a settings dialog (name, topic, who can post, free or paid).
+- **Teacher dashboard** (sidebar → «لوحة المعلم»): a setup checklist (course → lessons → invite → plan → connect Whop → first offer), channel permissions, and selling (offers in three steps with a live preview, subscribers, manual grants). New servers open here.
 - Reporting messages, and deleting your own account. Both app stores require these.
 - RTL by default with an English toggle. Each message chooses its own text direction. Optional Eastern Arabic digits (١٢٣). Dates use the Gregorian calendar, with Hijri formatting available.
 - Rate limits on sign-in and on sending messages.

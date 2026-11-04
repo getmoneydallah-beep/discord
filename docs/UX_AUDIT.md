@@ -39,7 +39,7 @@ Method: walked the teacher journey on the web app, from a new account to selling
 - **Phone:** the Offers page shows the sidebar and the page side by side, squeezing the content to a third of the screen.
 - **Server header:** «دعوة أشخاص» wraps onto two lines.
 
-## What changes
+## What changes (all done, 2026-11-04)
 1. **Teacher dashboard** at `/s/<id>/manage`, open to owners and admins. It has:
    - a **setup checklist** with live status: add a course → add lessons → invite students → choose a plan → connect Whop → create an offer. Each step has one button that does it.
    - **Channels:** every channel with its access (free/paid) and who can post.

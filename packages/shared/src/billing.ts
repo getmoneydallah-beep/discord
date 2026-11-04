@@ -164,3 +164,13 @@ export interface Sale {
   status: string;
   createdAt: string;
 }
+
+/** Teacher dashboard numbers for one server. */
+export interface ServerSummary {
+  courses: number;
+  lessons: number;
+  members: number;
+  subscribers: number;
+  offers: number;
+  paidChannels: number;
+}

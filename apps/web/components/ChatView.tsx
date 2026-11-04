@@ -62,7 +62,7 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
         <button onClick={() => setNav(true)} className="p-1 text-xl text-muted md:hidden" aria-label="menu">
           ☰
         </button>
-        <span className="text-xl text-muted">#</span>
+        <span className="text-xl text-muted">{channel.postPolicy === "staff" ? "📢" : "#"}</span>
         <h1 className="truncate font-bold" dir="auto">
           {channel.name}
         </h1>
@@ -84,7 +84,7 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
       <div ref={scroller} onScroll={onScroll} className="scroll-thin flex-1 overflow-y-auto pb-2">
         {data && !data.hasMore && (
           <div className="px-4 pb-4 pt-10">
-            <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-surface text-3xl">#</div>
+            <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-surface text-3xl">{channel.postPolicy === "staff" ? "📢" : "#"}</div>
             <h2 className="text-2xl font-bold" dir="auto">
               {t("channel.welcome", { name: channel.name })}
             </h2>
