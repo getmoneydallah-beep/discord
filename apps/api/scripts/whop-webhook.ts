@@ -8,6 +8,7 @@
  *
  * --replace   delete existing webhooks for the same URL first (rotates the secret)
  * --fly-app   pipe WHOP_WEBHOOK_SECRET into `fly secrets import --app <app>`
+ * --stage     with --fly-app: stage the secret (applied on the next deploy) instead of restarting now
  * --out       write the secret to a file (mode 600) instead / as well
  *
  * Whop shows a webhook secret only once; if it's lost, run again with --replace.
@@ -87,7 +88,7 @@ if (out) {
   console.log(`secret written to ${out}`);
 }
 if (flyApp) {
-  const r = spawnSync("fly", ["secrets", "import", "--app", flyApp], { input: `WHOP_WEBHOOK_SECRET=${secret}\n`, stdio: ["pipe", "inherit", "inherit"] });
+  const r = spawnSync("fly", ["secrets", "import", ...(flag("stage") ? ["--stage"] : []), "--app", flyApp], { input: `WHOP_WEBHOOK_SECRET=${secret}\n`, stdio: ["pipe", "inherit", "inherit"] });
   if (r.status !== 0) {
     console.error("fly secrets import failed; the webhook exists, rerun with --replace once fly works (or use --out).");
     process.exit(1);
