@@ -33,13 +33,18 @@ The web and mobile apps share the same API client and the same state store (`@ma
   - **For admins:** an inline editor with up/down ordering (lessons can move between sections). Changes save immediately.
   - On mobile, learners can do everything. Adding and editing lessons is web-only for now.
 
-- **Payments (Whop, sandbox):** Majlis's own Whop account is the only seller (see `docs/MONETIZATION_PLAN.md`).
-  - **Teacher plans** (web → ⚙ → «الاشتراك والفوترة»): Free, Starter $29, Pro $79, Academy $199 a month (yearly = 10 months), each with a 14-day trial through Whop checkout. Webhooks keep the plan in sync. Tier limits apply to servers you own, whether you can sell, offers per server, and the Majlis fee on sales (5 / 2 / 0 %).
-  - **Offers** (server sidebar → «العروض», owner only): a price in SAR or USD, billed one-time, monthly or yearly, with an optional trial and seat limit. An offer unlocks the whole server or chosen channels and courses. Each offer becomes a hidden Whop product and plan the first time someone checks out. A price change creates a new plan, and existing subscribers keep theirs.
-  - **Paid access:** channels and courses can be free or paid; lessons in a paid course can be free previews. Access is checked on the server for messages, reactions, search, lessons and their signed file links, progress and real-time pushes. Locked content shows «افتح بـ 99 ر.س» on the web. The iOS and Android apps only say «متاح للمشتركين», with no price or link (App Store rule).
-  - **Earnings ledger:** each sale books the gross amount, minus Whop's actual fee and minus Majlis's fee, and is held for 14 days. Refunds and chargebacks revoke access and book negative entries straight away. Teachers see pending, available and paid amounts and add their Whop username (⚙ → «الأرباح»).
-  - **Owner Payouts page** (⚙ → «التحويلات», only for `PLATFORM_ADMIN_EMAILS`): available balances, a CSV export, and "Mark paid" with the Whop reference. A payout can never exceed the available balance.
-  - Owners and admins can grant and revoke access manually, for example for scholarships or bank-transfer students.
+- **Payments (Whop, sandbox):** members never pay Majlis; only teachers do. See `docs/BYO_WHOP_PLAN.md`.
+  - **Teacher plans** (⚙ → «الاشتراك والفوترة»): Free, Starter $29, Pro $79 and Academy $199 a month (yearly = 10 months), each with a 14-day trial. They're sold on **Majlis's own Whop account**, and this subscription is Majlis's only income. Tier limits apply to servers owned, whether you can sell, and offers per server.
+  - **Teachers sell through their own Whop account** (⚙ → «ربط Whop», paid plans only):
+    - The teacher pastes an API key with the listed permissions. Majlis identifies the account, checks the permissions, creates a webhook on that account, and stores the key and webhook secret encrypted (AES-256-GCM).
+    - Students pay the teacher directly. The teacher is the seller, so refunds, taxes and withdrawals happen in their Whop dashboard.
+    - A revoked key pauses selling, and existing buyers keep access.
+  - **Offers** (server sidebar → «العروض», owner only): a price in SAR or USD, billed one-time, monthly or yearly, with an optional trial and seat limit. An offer unlocks the whole server or chosen channels and courses. Each offer becomes a hidden product and plan on the teacher's Whop account the first time someone checks out.
+  - **Paid access:** channels and courses can be free or paid; lessons in a paid course can be free previews.
+    - Access is checked on the server for messages, reactions, search, lessons and their signed file links, progress, and real-time pushes.
+    - The web shows «افتح بـ 99 ر.س». The phone apps only say «متاح للمشتركين», with no price or link (App Store rule).
+    - Refunds and chargebacks on the teacher's Whop account remove access. Owners and admins can grant and revoke access manually.
+  - **Sales** (⚙ → «المبيعات»): a read-only list of the teacher's student payments.
 
 **Not built yet:** push notifications, DMs, phone OTP login, voice, adaptive video streaming (HLS). See `PLAN.md`.
 
@@ -114,19 +119,23 @@ If deploys hang at "Waiting for remote builder" behind a corporate/agent proxy, 
 
 ### Whop payments setup
 
-The API reads `WHOP_ENV` (`sandbox` or `production`) and `WHOP_ACCOUNT_ID` (`biz_...`) from `fly.toml`. Secrets:
+`fly.toml` sets `WHOP_ENV` (`sandbox` or `production`) and `WHOP_ACCOUNT_ID` (Majlis's own `biz_...`, used for teacher plans). Secrets:
 
 ```bash
-fly secrets set --app majlis-sa-api WHOP_API_KEY=... PLATFORM_ADMIN_EMAILS=you@example.com
+fly secrets set --app majlis-sa-api WHOP_API_KEY=... WHOP_KEYS_ENCRYPTION_KEY=$(openssl rand -hex 32)
 ```
 
-Create the webhook (`https://majlis-sa-api.fly.dev/webhooks/whop`, 10 payment, membership, refund and dispute events). The script stores the signing secret on Fly without printing it, and `--replace` rotates it:
+Keep `WHOP_KEYS_ENCRYPTION_KEY` safe. If it's lost, every teacher has to paste their key again.
+
+Majlis's own webhook (teacher plans → `/webhooks/whop`) is created with the script below. It stores the signing secret on Fly without printing it, and `--replace` rotates it:
 
 ```bash
 WHOP_API_KEY=... WHOP_ACCOUNT_ID=biz_ACFSypxxqX2KZZ pnpm --filter @majlis/api whop:webhook -- --fly-app majlis-sa-api --replace
 ```
 
-Teacher plans are created in Whop on the first checkout and stored in the `whop_catalog` table, so there's no separate setup script. Sandbox test card: `4242 4242 4242 4242`. Whop only accepts `https://` return URLs, so local dev (http://localhost) gets Whop's own success page after paying.
+Teachers' webhooks (`/webhooks/whop/<connectionId>`) are created automatically on their own accounts when they connect. Teacher plans are created in Whop on the first checkout and stored in `whop_catalog`.
+
+Sandbox test card: `4242 4242 4242 4242`. Whop only calls and redirects to `https://` URLs. Local dev (http://localhost) gets Whop's own success page after paying, and teachers connect without a webhook unless `WHOP_WEBHOOK_BASE_URL` points to a public https URL.
 
 First API deploy (fresh account):
 

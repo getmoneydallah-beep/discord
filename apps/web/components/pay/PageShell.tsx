@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useT } from "@/lib/store";
 
-/** Full-width page inside the app shell (billing, earnings, payouts). */
+/** Full-width page inside the app shell (billing, Whop connection, sales). */
 export function PageShell({ title, icon, children, actions }: { title: string; icon: string; children: React.ReactNode; actions?: React.ReactNode }) {
   const t = useT();
   return (

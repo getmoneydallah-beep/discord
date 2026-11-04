@@ -7,6 +7,7 @@ import {
   OFFER_BILLING,
   OFFER_CURRENCIES,
   type BillingInfo,
+  type WhopConnectionInfo,
   type Entitlement,
   type Offer,
   type OfferBilling,
@@ -31,6 +32,7 @@ export default function OffersPage() {
   const [editing, setEditing] = useState<Offer | "new" | null>(null);
   const [ents, setEnts] = useState<Entitlement[]>([]);
   const [ownerBilling, setOwnerBilling] = useState<BillingInfo | null>(null);
+  const [whop, setWhop] = useState<WhopConnectionInfo | null>(null);
   const [grantFor, setGrantFor] = useState("");
   const [grantOffer, setGrantOffer] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,10 @@ export default function OffersPage() {
   const reloadEnts = () => api.listEntitlements(serverId).then(setEnts, () => undefined);
   useEffect(() => {
     void reloadEnts();
-    if (isOwner) api.getBilling().then(setOwnerBilling, () => undefined);
+    if (isOwner) {
+      api.getBilling().then(setOwnerBilling, () => undefined);
+      api.getWhopConnection().then(setWhop, () => undefined);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId, isOwner]);
 
@@ -76,6 +81,14 @@ export default function OffersPage() {
               <span className="flex-1">{t("pay.upgradeToSell")}</span>
               <Link href="/s/billing" className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
                 {t("pay.seePlans")}
+              </Link>
+            </div>
+          )}
+          {isOwner && canSell && whop && whop.connection?.status !== "active" && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-brand/10 p-4">
+              <span className="flex-1">{whop.connection ? t("pay.conn_broken") : t("pay.connectToSell")}</span>
+              <Link href="/s/whop" className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+                🔗 {t("pay.whop")}
               </Link>
             </div>
           )}

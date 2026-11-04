@@ -195,7 +195,6 @@ function Settings({ onClose }: { onClose: () => void }) {
   const prefs = useApp((s) => s.prefs);
   const { serverId } = useParams<{ serverId?: string }>();
   const myRole = useApp((s) => (serverId ? s.serverState[serverId]?.myRole : undefined));
-  const isAdmin = useApp((s) => Boolean(s.me?.isPlatformAdmin));
 
   async function guard(fn: () => Promise<unknown>) {
     try {
@@ -232,8 +231,8 @@ function Settings({ onClose }: { onClose: () => void }) {
         <nav className="flex flex-col gap-1 border-t border-line pt-4 text-sm">
           {[
             ["/s/billing", "⭐", t("pay.billing")],
-            ["/s/earnings", "💰", t("pay.earnings")],
-            ...(isAdmin ? [["/s/payouts", "🏦", t("pay.payouts")]] : []),
+            ["/s/whop", "🔗", t("pay.whop")],
+            ["/s/sales", "🧾", t("pay.sales")],
           ].map(([href, icon, label]) => (
             <Link key={href} href={href!} onClick={onClose} className="rounded-md px-2 py-2 hover:bg-surface-hover">
               {icon} {label}

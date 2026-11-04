@@ -1,15 +1,13 @@
 import type {
-  AdminPayoutRow,
   BillingInfo,
   BillingInterval,
   CheckoutResponse,
-  Earnings,
   Entitlement,
   Offer,
   OfferInput,
   PaidTier,
-  Payout,
-  PayoutAccount,
+  Sale,
+  WhopConnectionInfo,
   ApiErrorBody,
   Course,
   CourseSection,
@@ -155,20 +153,11 @@ export class ApiClient {
     this.request<Entitlement>("POST", `/servers/${serverId}/entitlements`, { userId, offerId });
   revokeEntitlement = (id: string) => this.request<void>("DELETE", `/entitlements/${id}`);
 
-  // Earnings and payouts
-  getEarnings = () => this.request<Earnings>("GET", "/earnings");
-  setPayoutAccount = (whopUsername: string) => this.request<PayoutAccount>("PUT", "/earnings/payout-account", { whopUsername });
-  adminPayouts = () =>
-    this.request<{ rows: AdminPayoutRow[]; history: Payout[]; minPayoutMinor: number; holdDays: number }>("GET", "/admin/payouts");
-  markPaid = (input: { teacherId: string; currency: string; amountMinor: number; whopReference: string; note?: string }) =>
-    this.request<Payout>("POST", "/admin/payouts", input);
-  /** CSV as text (needs the auth header, so it can't be a plain link). */
-  async adminPayoutsCsv(): Promise<string> {
-    const token = this.opts.getToken();
-    const res = await fetch(`${this.baseUrl}/admin/payouts.csv`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) throw new ApiError(res.status, "csv_failed");
-    return res.text();
-  }
+  // Teacher's own Whop account
+  getWhopConnection = () => this.request<WhopConnectionInfo>("GET", "/whop/connection");
+  connectWhop = (apiKey: string) => this.request<WhopConnectionInfo>("PUT", "/whop/connection", { apiKey });
+  disconnectWhop = () => this.request<void>("DELETE", "/whop/connection");
+  listSales = () => this.request<Sale[]>("GET", "/sales");
 
   // Uploads
   createUpload = (serverId: string, input: { filename: string; contentType: string; size: number; purpose: UploadPurpose }) =>

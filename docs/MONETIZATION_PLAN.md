@@ -1,5 +1,7 @@
 # Majlis: monetization and growth plan
 
+> **Changed (2026-11-04):** students now pay **teachers' own Whop accounts**, and Majlis earns only from teacher plans. See `BYO_WHOP_PLAN.md`. The "Majlis is the seller" model in §1 and §4B–C, the earnings ledger and the payouts below are kept for history only and have been removed from the code.
+
 **The rule:** members (students and regular users) always use Majlis for free. **Only teachers, meaning server owners, pay.** They pay a monthly platform subscription, plus a small platform fee on what they sell. Teachers sell access to their server's paid content, and Majlis pays them out through Whop.
 
 ---

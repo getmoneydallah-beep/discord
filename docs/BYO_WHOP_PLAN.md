@@ -1,5 +1,16 @@
 # Plan: teachers sell through their own Whop accounts
 
+> **Status: built (2026-11-04), Whop sandbox.** Decisions: no per-sale cut (teacher plans only), teacher plans stay on Majlis's Whop account, only paid plans can connect.
+>
+> Verified against the real sandbox:
+> - `GET /accounts/me` identifies the account behind a pasted key.
+> - Connecting creates the webhook on the teacher's account.
+> - A real checkout on the teacher's account, relayed with that connection's stored secret, grants access and shows in Sales.
+> - A real refund removes access.
+> - Disconnecting deletes the teacher's webhook on Whop.
+>
+> Still open: a second, separately owned sandbox account with a narrowly scoped key, to confirm the exact permission names and archiving a plan with only `access_pass:update`/`plan:create`.
+
 **Change:** students pay the teacher's **own** Whop account, not Majlis's. Each teacher connects their Whop account to Majlis by pasting an API key. The teacher is the seller: they handle refunds, chargebacks, VAT and payouts on their side. Majlis becomes software that opens checkouts and unlocks content when Whop says a payment went through.
 
 This replaces the "Majlis is the seller" model in `MONETIZATION_PLAN.md` §1 and §4B–C for **student purchases**. Teacher plans (what teachers pay Majlis) stay on Majlis's own Whop account: Majlis selling its own software is ordinary and low risk.

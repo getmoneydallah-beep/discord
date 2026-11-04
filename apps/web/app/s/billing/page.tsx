@@ -87,7 +87,7 @@ function Billing() {
             )}
             <ul className="mt-3 grid gap-1 text-sm text-muted sm:grid-cols-2">
               <li>{t("pay.servers", { n: `${info.usage.ownedServers} / ${info.limits.maxOwnedServers}` })}</li>
-              <li>{info.limits.canSell ? t("pay.fee", { n: info.limits.platformFeeBps / 100 }) : t("pay.noSelling")}</li>
+              {!info.limits.canSell && <li>{t("pay.noSelling")}</li>}
             </ul>
             {sub?.manageUrl && live && (
               <a href={sub.manageUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm text-brand hover:underline">
@@ -126,7 +126,6 @@ function Billing() {
                       <ul className="flex-1 space-y-1 text-sm">
                         <li>✓ {t("pay.servers", { n: l.maxOwnedServers })}</li>
                         <li>✓ {t("pay.offersPerServer", { n: l.maxOffersPerServer ?? t("pay.unlimited") })}</li>
-                        <li>✓ {t("pay.fee", { n: l.platformFeeBps / 100 })}</li>
                         <li>✓ {t("pay.storage", { n: l.storageGb })}</li>
                       </ul>
                       <Button disabled={busy !== null} onClick={() => choose(tier)}>
