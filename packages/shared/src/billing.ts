@@ -16,16 +16,14 @@ export interface TierLimits {
   canSell: boolean;
   /** null = unlimited */
   maxOffersPerServer: number | null;
-  /** Majlis fee on each sale, in basis points (500 = 5%). */
-  platformFeeBps: number;
   storageGb: number;
 }
 
 export const TIERS: Record<TeacherTier, TierLimits> = {
-  free: { priceUsd: { monthly: 0, yearly: 0 }, maxOwnedServers: 1, canSell: false, maxOffersPerServer: 0, platformFeeBps: 0, storageGb: 2 },
-  starter: { priceUsd: { monthly: 29, yearly: 290 }, maxOwnedServers: 1, canSell: true, maxOffersPerServer: 3, platformFeeBps: 500, storageGb: 50 },
-  pro: { priceUsd: { monthly: 79, yearly: 790 }, maxOwnedServers: 3, canSell: true, maxOffersPerServer: null, platformFeeBps: 200, storageGb: 300 },
-  academy: { priceUsd: { monthly: 199, yearly: 1990 }, maxOwnedServers: 10, canSell: true, maxOffersPerServer: null, platformFeeBps: 0, storageGb: 1024 },
+  free: { priceUsd: { monthly: 0, yearly: 0 }, maxOwnedServers: 1, canSell: false, maxOffersPerServer: 0, storageGb: 2 },
+  starter: { priceUsd: { monthly: 29, yearly: 290 }, maxOwnedServers: 1, canSell: true, maxOffersPerServer: 3, storageGb: 50 },
+  pro: { priceUsd: { monthly: 79, yearly: 790 }, maxOwnedServers: 3, canSell: true, maxOffersPerServer: null, storageGb: 300 },
+  academy: { priceUsd: { monthly: 199, yearly: 1990 }, maxOwnedServers: 10, canSell: true, maxOffersPerServer: null, storageGb: 1024 },
 };
 
 export const TRIAL_DAYS = 14;
@@ -126,90 +124,43 @@ export interface CheckoutResponse {
   url: string;
 }
 
-/* ------------------------------ earnings ledger ------------------------------ */
+/* ------------------------- teacher's own Whop account ------------------------- */
 
-export const LEDGER_TYPES = [
-  "sale",
-  "whop_fee",
-  "platform_fee",
-  "refund",
-  "chargeback",
-  "payout",
-  "adjustment",
-] as const;
-export type LedgerType = (typeof LEDGER_TYPES)[number];
+export type WhopConnectionStatus = "active" | "broken" | "disconnected";
 
-export interface LedgerEntry {
+export interface WhopConnection {
+  status: WhopConnectionStatus;
+  accountId: string;
+  accountTitle: string;
+  /** Last 4 characters of the pasted key; the key itself is never sent back. */
+  keyLast4: string | null;
+  /** False in local dev when no public https URL exists for Whop to call. */
+  webhookActive: boolean;
+  lastError: string | null;
+  missingPermissions: string[];
+  connectedAt: string;
+}
+
+export interface WhopConnectionInfo {
+  connection: WhopConnection | null;
+  /** Permissions to tick when creating the key in Whop. */
+  requiredPermissions: string[];
+  env: "sandbox" | "production";
+}
+
+export const connectWhopSchema = z.object({
+  apiKey: z.string().trim().min(10).max(500).regex(/^apik_[A-Za-z0-9_-]+$/, "invalid_whop_key"),
+});
+
+/** One student payment to the teacher's Whop account (read-only; money matters live in Whop). */
+export interface Sale {
   id: string;
-  type: LedgerType;
-  amountMinor: number;
-  currency: string;
-  serverId: string | null;
+  offerName: string | null;
   serverName: string | null;
-  paymentId: string | null;
-  payoutId: string | null;
-  note: string | null;
-  availableAt: string;
+  student: { id: string; displayName: string; username: string } | null;
+  currency: string;
+  totalMinor: number;
+  refundedMinor: number;
+  status: string;
   createdAt: string;
-}
-
-export interface Balance {
-  currency: string;
-  /** Still inside the hold period. */
-  pendingMinor: number;
-  /** Payable now (can be negative after refunds/chargebacks). */
-  availableMinor: number;
-  paidMinor: number;
-  grossSalesMinor: number;
-}
-
-export interface Payout {
-  id: string;
-  teacherId: string;
-  amountMinor: number;
-  currency: string;
-  status: "sent" | "failed";
-  whopReference: string | null;
-  note: string | null;
-  sentAt: string;
-}
-
-export interface PayoutAccount {
-  whopUsername: string | null;
-  updatedAt: string | null;
-}
-
-export interface Earnings {
-  balances: Balance[];
-  entries: LedgerEntry[];
-  payouts: Payout[];
-  payoutAccount: PayoutAccount;
-  holdDays: number;
-  minPayoutMinor: number;
-}
-
-export const payoutAccountSchema = z.object({
-  whopUsername: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_.-]+$/, "invalid_whop_username"),
-});
-
-export interface AdminPayoutRow {
-  teacher: { id: string; username: string; displayName: string; email: string };
-  payoutAccount: PayoutAccount;
-  balance: Balance;
-  eligible: boolean;
-}
-
-export const markPaidSchema = z.object({
-  teacherId: z.string().min(1),
-  currency: z.string().min(3).max(3),
-  amountMinor: z.number().int().positive(),
-  whopReference: z.string().trim().min(1).max(200),
-  note: z.string().trim().max(500).optional(),
-});
-
-/** "9900" + "sar" → "99.00 SAR" (formatting for display lives in i18n; this is for CSV/logs). */
-export function formatMinor(amountMinor: number, currency: string): string {
-  const sign = amountMinor < 0 ? "-" : "";
-  const abs = Math.abs(amountMinor);
-  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")} ${currency.toUpperCase()}`;
 }

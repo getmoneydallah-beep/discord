@@ -12,8 +12,6 @@ export interface Me extends User {
   email: string;
   locale: Locale;
   createdAt: string;
-  /** Majlis staff: can see the owner Payouts page. */
-  isPlatformAdmin?: boolean;
 }
 
 export interface Server {

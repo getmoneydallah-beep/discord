@@ -101,7 +101,48 @@ export interface WhopApi {
   archivePlan(planId: string): Promise<void>;
   createCheckout(input: { planId: string; metadata: Record<string, string>; redirectUrl: string }): Promise<WhopCheckout>;
   getMembership(id: string): Promise<WhopMembership>;
+  createWebhook(input: { url: string; events: readonly string[]; title: string }): Promise<{ id: string; secret: string }>;
+  deleteWebhook(id: string): Promise<void>;
+  /** Cheap reads that need the given permission; resolves to the permissions that failed. */
+  checkReadPermissions(): Promise<string[]>;
 }
+
+/** Turns a raw API key into a client: finds the Whop account the key belongs to. */
+export interface WhopConnector {
+  readonly env: "sandbox" | "production";
+  account(apiKey: string): Promise<{ id: string; title: string }>;
+  client(apiKey: string, accountId: string): WhopApi;
+}
+
+/** Permissions a teacher's key needs. Nothing that moves money (no refunds, balances or payouts). */
+export const TEACHER_KEY_PERMISSIONS = [
+  "access_pass:create",
+  "access_pass:update",
+  "access_pass:basic:read",
+  "plan:create",
+  "plan:basic:read",
+  "checkout_configuration:create",
+  "checkout_configuration:basic:read",
+  "payment:basic:read",
+  "member:basic:read",
+  "developer:manage_webhook",
+  "webhook_receive:payments",
+  "webhook_receive:memberships",
+  "webhook_receive:refunds",
+  "webhook_receive:disputes",
+] as const;
+
+/** "Actor is missing all required permissions: plan:create, x:y" → ["plan:create", "x:y"] */
+export function missingPermissions(err: unknown): string[] {
+  if (!(err instanceof WhopError)) return [];
+  const msg = JSON.stringify(err.body ?? "");
+  const m = msg.match(/missing (?:all |any )?(?:of the )?required permissions?:\s*([a-z_:,\s]+)/i);
+  return m ? m[1]!.split(/[,\s]+/).filter((x) => x.includes(":")) : [];
+}
+
+/** 401 (bad/revoked key) or a permission error. */
+export const isAuthError = (err: unknown) =>
+  err instanceof WhopError && (err.status === 401 || err.status === 403 || missingPermissions(err).length > 0);
 
 export class WhopError extends Error {
   constructor(
@@ -154,7 +195,7 @@ export function createWhop(opts: { env: "sandbox" | "production"; apiKey: string
         title: input.title.slice(0, 80),
         currency: input.currency.toLowerCase(),
         visibility: "hidden",
-        // Keep the buyer's price in the plan currency so the ledger matches the offer (no FX conversion).
+        // Buyers pay exactly the offer price in its currency (no automatic FX conversion).
         adaptive_pricing_enabled: false,
         ...billingFields(input.billing, input.price),
         trial_period_days: input.billing === "one_time" ? null : (input.trialDays ?? null),
@@ -173,6 +214,57 @@ export function createWhop(opts: { env: "sandbox" | "production"; apiKey: string
         redirect_url: input.redirectUrl.startsWith("https://") ? input.redirectUrl : null,
       }),
     getMembership: (id) => call<WhopMembership>("GET", `/memberships/${encodeURIComponent(id)}`),
+    createWebhook: async (input) => {
+      const hook = await call<{ id: string; webhook_secret?: string }>("POST", "/webhooks", {
+        url: input.url,
+        events: input.events,
+        resource_id: opts.accountId,
+        api_version_date: WHOP_API_VERSION_DATE,
+        enabled: true,
+        title: input.title,
+      });
+      if (!hook.webhook_secret) throw new WhopError(502, { error: "no webhook secret returned" });
+      return { id: hook.id, secret: hook.webhook_secret };
+    },
+    deleteWebhook: async (id) => {
+      await call("DELETE", `/webhooks/${encodeURIComponent(id)}`);
+    },
+    checkReadPermissions: async () => {
+      const a = encodeURIComponent(opts.accountId);
+      const probes: [string, string][] = [
+        ["access_pass:basic:read", `/products?account_id=${a}&first=1`],
+        ["plan:basic:read", `/plans?account_id=${a}&first=1`],
+        ["checkout_configuration:basic:read", `/checkout_configurations?account_id=${a}&first=1`],
+        ["payment:basic:read", `/payments?account_id=${a}&first=1`],
+        ["member:basic:read", `/memberships?account_id=${a}&first=1`],
+      ];
+      const failed: string[] = [];
+      for (const [perm, path] of probes) {
+        try {
+          await call("GET", path);
+        } catch (err) {
+          if (!isAuthError(err)) throw err;
+          failed.push(...(missingPermissions(err).length ? missingPermissions(err) : [perm]));
+        }
+      }
+      return [...new Set(failed)];
+    },
+  };
+}
+
+export function createWhopConnector(env: "sandbox" | "production"): WhopConnector {
+  return {
+    env,
+    async account(apiKey) {
+      const res = await fetch(`${WHOP_BASE_URL[env]}/accounts/me`, {
+        headers: { authorization: `Bearer ${apiKey}`, "Api-Version-Date": WHOP_API_VERSION_DATE },
+        signal: AbortSignal.timeout(15_000),
+      });
+      const data = (await res.json().catch(() => null)) as { id?: string; title?: string } | null;
+      if (!res.ok || !data?.id) throw new WhopError(res.status === 200 ? 502 : res.status, data);
+      return { id: data.id, title: data.title ?? data.id };
+    },
+    client: (apiKey, accountId) => createWhop({ env, apiKey, accountId }),
   };
 }
 

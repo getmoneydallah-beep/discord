@@ -18,15 +18,18 @@ import { messageRoutes } from "./routes/messages";
 import { serverRoutes } from "./routes/servers";
 import { billingRoutes, whopWebhookRoutes } from "./routes/billing";
 import { createBilling } from "./billing";
-import { createWhop, WhopError, type WhopApi } from "./whop";
+import { createWhop, createWhopConnector, WhopError, type WhopApi, type WhopConnector } from "./whop";
+import { createSecretBox } from "./crypto";
 
 export interface BuildOptions {
   sql: Sql;
   bus?: Bus;
   storage?: Storage;
   logger?: boolean;
-  /** Whop client; null disables checkout. Defaults to one built from WHOP_* env vars. */
+  /** Majlis's own Whop account (teacher plans); null disables plan checkout. Defaults to WHOP_* env vars. */
   whop?: WhopApi | null;
+  /** Builds clients for teachers' own Whop accounts from their pasted keys. */
+  connector?: WhopConnector | null;
 }
 
 export function createWhopFromEnv(): WhopApi | null {
@@ -46,9 +49,12 @@ export async function buildApp({
   storage = createStorage(),
   logger = true,
   whop = createWhopFromEnv(),
+  connector = createWhopConnector(config.whop.env),
 }: BuildOptions) {
   const app = Fastify({
-    logger: logger ? { level: config.isProd ? "info" : "debug" } : false,
+    logger: logger
+      ? { level: config.isProd ? "info" : "debug", redact: ["req.headers.authorization", "req.body.apiKey", "apiKey"] }
+      : false,
     trustProxy: true, // behind Fly's proxy / Cloudflare
     bodyLimit: 1024 * 1024,
   });
@@ -80,7 +86,16 @@ export async function buildApp({
   const repo = createRepo(sql, files);
   const gateway = registerGateway(app, { bus, repo });
   const emit: Ctx["emit"] = (scope, event) => bus.publish({ scope, event });
-  const billing = createBilling({ sql, whop, webUrl: config.webUrl, holdDays: config.payoutHoldDays, emit, log: app.log });
+  const billing = createBilling({
+    sql,
+    whop,
+    connector,
+    box: createSecretBox(config.keysEncryptionKey),
+    webUrl: config.webUrl,
+    webhookBaseUrl: config.webhookBaseUrl,
+    emit,
+    log: app.log,
+  });
   const ctx: Ctx = {
     sql,
     repo,
@@ -121,10 +136,14 @@ export async function buildApp({
   if ("register" in storage) await (storage as ReturnType<typeof localStorage>).register(app);
 
   const gc = startUploadGc(sql, storage, app.log);
+  // Daily check of teachers' Whop keys, so a revoked key pauses selling before a student tries to pay.
+  const connectionCheck = setInterval(() => void billing.checkConnections().catch((err: unknown) => app.log.warn({ err }, "whop connection check failed")), 24 * 3_600_000);
+  connectionCheck.unref();
   app.decorate("uploadGc", gc);
 
   app.addHook("onClose", async () => {
     gc.stop();
+    clearInterval(connectionCheck);
     await bus.close();
   });
 

@@ -1,5 +1,4 @@
 import { TIERS, type Channel, type Me, type Member, type Message, type Role, type Server, type TeacherTier, type User } from "@majlis/shared";
-import { config } from "./config";
 import type { Sql } from "./db";
 import { forbidden, HttpError, notFound } from "./errors";
 import { uploadJson, type Files, type UploadRow } from "./files";
@@ -21,7 +20,6 @@ export const toMe = (r: Row): Me => ({
   email: r.email,
   locale: r.locale,
   createdAt: iso(r.createdAt)!,
-  isPlatformAdmin: config.platformAdminEmails.includes(String(r.email).toLowerCase()),
 });
 
 export const toServer = (r: Row): Server => ({

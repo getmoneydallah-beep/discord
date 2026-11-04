@@ -36,21 +36,23 @@ export const config = {
     accountId: process.env.WHOP_ACCOUNT_ID || null,
     webhookSecret: process.env.WHOP_WEBHOOK_SECRET || null,
   },
-  /** Earnings stay pending this many days (refund window) before they can be paid out. */
-  payoutHoldDays: Number(process.env.PAYOUT_HOLD_DAYS ?? 14),
-  /** Minimum available balance (minor units, e.g. 10000 = 100.00 SAR) before a payout is suggested. */
-  payoutMinMinor: Number(process.env.PAYOUT_MIN_MINOR ?? 10_000),
-  /** Emails of Majlis staff who can open the owner Payouts page. */
-  platformAdminEmails: (process.env.PLATFORM_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean),
+  /**
+   * Encrypts teachers' Whop API keys at rest (64 hex chars: `openssl rand -hex 32`).
+   * Required in production.
+   */
+  keysEncryptionKey: process.env.WHOP_KEYS_ENCRYPTION_KEY || (isProd ? "" : "dev-only-whop-keys-encryption-key"),
+  /** Public https base URL Whop sends teachers' webhooks to (defaults to PUBLIC_API_URL). */
+  webhookBaseUrl: process.env.WHOP_WEBHOOK_BASE_URL || process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT ?? 4000}`,
 };
 
 // Local disk storage in production is only allowed when explicitly requested
 // (e.g. a single Fly machine with a persistent volume, before R2 is set up).
 if (isProd && !config.r2 && process.env.ALLOW_LOCAL_STORAGE !== "true") {
   throw new Error("R2_* env vars are required in production (or set ALLOW_LOCAL_STORAGE=true with a persistent volume)");
+}
+
+if (isProd && !/^[0-9a-f]{64}$/i.test(config.keysEncryptionKey)) {
+  throw new Error("WHOP_KEYS_ENCRYPTION_KEY (64 hex chars) is required in production");
 }
 
 if (isProd && config.jwtSecret.length < 32) {

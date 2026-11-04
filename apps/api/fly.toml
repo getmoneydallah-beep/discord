@@ -23,13 +23,12 @@ primary_region = "fra"
   # Files and course videos are stored in Cloudflare R2 (bucket "majlis-media",
   # location EEUR). Credentials are Fly secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
   # R2_SECRET_ACCESS_KEY, R2_BUCKET.
-  # Payments: Majlis's own Whop account is the seller. Secrets: WHOP_API_KEY,
-  # WHOP_WEBHOOK_SECRET (from `pnpm --filter @majlis/api whop:webhook`), and
-  # PLATFORM_ADMIN_EMAILS (who sees the owner Payouts page).
+  # Payments. Teacher plans are sold on Majlis's own Whop account (secrets:
+  # WHOP_API_KEY, WHOP_WEBHOOK_SECRET from `pnpm --filter @majlis/api whop:webhook`).
+  # Students pay teachers' own Whop accounts; their pasted keys are encrypted
+  # with WHOP_KEYS_ENCRYPTION_KEY (secret, `openssl rand -hex 32`).
   WHOP_ENV = "sandbox"
   WHOP_ACCOUNT_ID = "biz_ACFSypxxqX2KZZ"
-  PAYOUT_HOLD_DAYS = "14"
-  PAYOUT_MIN_MINOR = "10000"
 
 [http_service]
   internal_port = 8080

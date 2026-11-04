@@ -1,32 +1,28 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   channelAccessSchema,
-  formatMinor,
+  connectWhopSchema,
   manualGrantSchema,
-  markPaidSchema,
   newId,
   offerSchema,
-  payoutAccountSchema,
   teacherCheckoutSchema,
   TIERS,
   updateOfferSchema,
-  type AdminPayoutRow,
-  type Balance,
   type BillingInfo,
-  type Earnings,
   type Entitlement,
-  type LedgerEntry,
   type Offer,
-  type Payout,
+  type Sale,
   type TeacherTier,
+  type WhopConnectionInfo,
 } from "@majlis/shared";
 import { requireAuth } from "../auth";
-import type { Billing } from "../billing";
+import type { Billing, WebhookSource } from "../billing";
 import { config } from "../config";
 import type { Ctx } from "../context";
 import { badRequest, forbidden, HttpError, notFound } from "../errors";
+import { createLimiter } from "../ratelimit";
 import { toChannel } from "../repo";
-import { verifyWhopWebhook, WebhookSignatureError } from "../whop";
+import { TEACHER_KEY_PERMISSIONS, verifyWhopWebhook, WebhookSignatureError } from "../whop";
 
 type Row = Record<string, any>;
 const iso = (d: Date | string | null) => (d == null ? null : new Date(d).toISOString());
@@ -34,14 +30,6 @@ const num = (v: unknown) => Number(v ?? 0);
 
 export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billing }) {
   const { sql, repo, billing, emit } = ctx;
-
-  async function isPlatformAdmin(userId: string) {
-    const [row] = await sql<{ email: string }[]>`SELECT email FROM users WHERE id = ${userId}`;
-    return Boolean(row && config.platformAdminEmails.includes(row.email.toLowerCase()));
-  }
-  async function requirePlatformAdmin(userId: string) {
-    if (!(await isPlatformAdmin(userId))) throw notFound();
-  }
 
   /* --------------------------- teacher billing --------------------------- */
 
@@ -200,7 +188,7 @@ export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billin
         }
       }
     });
-    if (priceChanged) await billing.retireOfferPlan(offer.whopPlanId);
+    if (priceChanged) await billing.retireOfferPlan(req.userId, offer.whopPlanId, offer.connectionId);
     if (input.grants) await emit({ serverIds: [offer.serverId] }, { t: "ACCESS_UPDATE", d: { serverId: offer.serverId } });
     return (await offersFor(offer.serverId, req.userId, true)).find((o) => o.id === offer.id)!;
   });
@@ -213,7 +201,7 @@ export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billin
     const [paid] = await sql`SELECT 1 FROM payments WHERE offer_id = ${offer.id} LIMIT 1`;
     if (held || paid) await sql`UPDATE offers SET active = false, updated_at = now() WHERE id = ${offer.id}`;
     else await sql`DELETE FROM offers WHERE id = ${offer.id}`;
-    await billing.retireOfferPlan(offer.whopPlanId);
+    await billing.retireOfferPlan(req.userId, offer.whopPlanId, offer.connectionId);
     reply.code(204);
   });
 
@@ -300,170 +288,52 @@ export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billin
     reply.code(204);
   });
 
-  /* ------------------------------- earnings ------------------------------- */
+  /* ----------------------- teacher's own Whop account ----------------------- */
 
-  async function balances(teacherId: string | null): Promise<(Balance & { teacherId: string })[]> {
-    const rows = await sql`
-      SELECT teacher_user_id, currency,
-        COALESCE(SUM(amount_minor) FILTER (WHERE available_at > now()), 0) AS pending,
-        COALESCE(SUM(amount_minor) FILTER (WHERE available_at <= now()), 0) AS available,
-        COALESCE(-SUM(amount_minor) FILTER (WHERE type = 'payout'), 0) AS paid,
-        COALESCE(SUM(amount_minor) FILTER (WHERE type = 'sale'), 0) AS gross
-      FROM ledger_entries
-      WHERE teacher_user_id IS NOT NULL ${teacherId ? sql`AND teacher_user_id = ${teacherId}` : sql``}
-      GROUP BY teacher_user_id, currency
-      ORDER BY currency`;
-    return rows.map((r) => ({
-      teacherId: r.teacherUserId,
-      currency: r.currency,
-      pendingMinor: num(r.pending),
-      availableMinor: num(r.available),
-      paidMinor: num(r.paid),
-      grossSalesMinor: num(r.gross),
-    }));
-  }
+  app.get("/whop/connection", { preHandler: requireAuth }, async (req): Promise<WhopConnectionInfo> => ({
+    connection: await billing.getConnection(req.userId),
+    requiredPermissions: [...TEACHER_KEY_PERMISSIONS],
+    env: config.whop.env,
+  }));
 
-  const toPayout = (r: Row): Payout => ({
-    id: r.id,
-    teacherId: r.teacherUserId,
-    amountMinor: num(r.amountMinor),
-    currency: r.currency,
-    status: r.status,
-    whopReference: r.whopReference ?? null,
-    note: r.note ?? null,
-    sentAt: iso(r.sentAt)!,
-  });
-
-  async function payoutAccount(teacherId: string) {
-    const [row] = await sql`SELECT * FROM payout_accounts WHERE teacher_user_id = ${teacherId}`;
-    return { whopUsername: row?.whopUsername ?? null, updatedAt: iso(row?.updatedAt ?? null) };
-  }
-
-  app.get("/earnings", { preHandler: requireAuth }, async (req): Promise<Earnings> => {
-    const entries = await sql`
-      SELECT l.*, s.name AS server_name FROM ledger_entries l LEFT JOIN servers s ON s.id = l.server_id
-      WHERE l.teacher_user_id = ${req.userId}
-      ORDER BY l.created_at DESC, l.id DESC LIMIT 200`;
-    const payouts = await sql`SELECT * FROM payouts WHERE teacher_user_id = ${req.userId} ORDER BY sent_at DESC LIMIT 100`;
+  const connectLimit = createLimiter(10, 60_000);
+  app.put("/whop/connection", { preHandler: requireAuth }, async (req) => {
+    connectLimit(req.userId);
+    const { apiKey } = connectWhopSchema.parse(req.body);
+    await billing.connect(req.userId, apiKey);
     return {
-      balances: (await balances(req.userId)).map(({ teacherId: _, ...b }) => b),
-      entries: entries.map(
-        (r): LedgerEntry => ({
-          id: r.id,
-          type: r.type,
-          amountMinor: num(r.amountMinor),
-          currency: r.currency,
-          serverId: r.serverId ?? null,
-          serverName: r.serverName ?? null,
-          paymentId: r.paymentId ?? null,
-          payoutId: r.payoutId ?? null,
-          note: r.note ?? null,
-          availableAt: iso(r.availableAt)!,
-          createdAt: iso(r.createdAt)!,
-        }),
-      ),
-      payouts: payouts.map(toPayout),
-      payoutAccount: await payoutAccount(req.userId),
-      holdDays: config.payoutHoldDays,
-      minPayoutMinor: config.payoutMinMinor,
-    };
+      connection: await billing.getConnection(req.userId),
+      requiredPermissions: [...TEACHER_KEY_PERMISSIONS],
+      env: config.whop.env,
+    } satisfies WhopConnectionInfo;
   });
 
-  app.put("/earnings/payout-account", { preHandler: requireAuth }, async (req) => {
-    const { whopUsername } = payoutAccountSchema.parse(req.body);
-    await sql`
-      INSERT INTO payout_accounts (teacher_user_id, whop_username) VALUES (${req.userId}, ${whopUsername})
-      ON CONFLICT (teacher_user_id) DO UPDATE SET whop_username = EXCLUDED.whop_username, updated_at = now()`;
-    return payoutAccount(req.userId);
+  app.delete("/whop/connection", { preHandler: requireAuth }, async (req, reply) => {
+    await billing.disconnect(req.userId);
+    reply.code(204);
   });
 
-  /* --------------------------- owner: payouts --------------------------- */
-
-  async function adminRows(): Promise<AdminPayoutRow[]> {
-    const all = await balances(null);
-    if (all.length === 0) return [];
-    const ids = [...new Set(all.map((b) => b.teacherId))];
-    const users = await sql`
-      SELECT u.id, u.username, u.display_name, u.email, p.whop_username, p.updated_at AS account_updated_at
-      FROM users u LEFT JOIN payout_accounts p ON p.teacher_user_id = u.id WHERE u.id = ANY(${ids})`;
-    const byId = new Map(users.map((u) => [u.id as string, u]));
-    return all
-      .filter((b) => byId.has(b.teacherId))
-      .map(({ teacherId, ...balance }) => {
-        const u = byId.get(teacherId)!;
-        return {
-          teacher: { id: u.id, username: u.username, displayName: u.displayName, email: u.email },
-          payoutAccount: { whopUsername: u.whopUsername ?? null, updatedAt: iso(u.accountUpdatedAt ?? null) },
-          balance,
-          eligible: balance.availableMinor >= config.payoutMinMinor && Boolean(u.whopUsername),
-        };
-      })
-      .sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.balance.availableMinor - a.balance.availableMinor);
-  }
-
-  app.get("/admin/payouts", { preHandler: requireAuth }, async (req) => {
-    await requirePlatformAdmin(req.userId);
-    const history = await sql`SELECT * FROM payouts ORDER BY sent_at DESC LIMIT 200`;
-    return { rows: await adminRows(), history: history.map(toPayout), minPayoutMinor: config.payoutMinMinor, holdDays: config.payoutHoldDays };
-  });
-
-  app.get("/admin/payouts.csv", { preHandler: requireAuth }, async (req, reply) => {
-    await requirePlatformAdmin(req.userId);
-    const rows = await adminRows();
-    const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const lines = [
-      ["teacher_id", "username", "email", "whop_username", "currency", "available", "pending", "paid", "eligible"].join(","),
-      ...rows.map((r) =>
-        [
-          r.teacher.id,
-          r.teacher.username,
-          r.teacher.email,
-          r.payoutAccount.whopUsername ?? "",
-          r.balance.currency.toUpperCase(),
-          formatMinor(r.balance.availableMinor, r.balance.currency).split(" ")[0]!,
-          formatMinor(r.balance.pendingMinor, r.balance.currency).split(" ")[0]!,
-          formatMinor(r.balance.paidMinor, r.balance.currency).split(" ")[0]!,
-          r.eligible ? "yes" : "no",
-        ]
-          .map((v) => esc(String(v)))
-          .join(","),
-      ),
-    ];
-    reply.header("content-type", "text/csv; charset=utf-8");
-    reply.header("content-disposition", `attachment; filename="majlis-payouts-${new Date().toISOString().slice(0, 10)}.csv"`);
-    return "﻿" + lines.join("\n") + "\n";
-  });
-
-  /** The owner sent money in Whop; record it. Never more than the available balance. */
-  app.post("/admin/payouts", { preHandler: requireAuth }, async (req, reply) => {
-    await requirePlatformAdmin(req.userId);
-    const input = markPaidSchema.parse(req.body);
-    const currency = input.currency.toLowerCase();
-    const payout = await sql.begin(async (tx) => {
-      await tx`SELECT pg_advisory_xact_lock(hashtext(${"payout:" + input.teacherId}))`;
-      const [bal] = await tx<{ available: string }[]>`
-        SELECT COALESCE(SUM(amount_minor), 0) AS available FROM ledger_entries
-        WHERE teacher_user_id = ${input.teacherId} AND currency = ${currency} AND available_at <= now()`;
-      if (input.amountMinor > num(bal?.available)) throw new HttpError(409, "exceeds_available_balance");
-      const id = newId();
-      const [row] = await tx`
-        INSERT INTO payouts (id, teacher_user_id, amount_minor, currency, whop_reference, note, sent_by)
-        VALUES (${id}, ${input.teacherId}, ${input.amountMinor}, ${currency}, ${input.whopReference}, ${input.note ?? null}, ${req.userId})
-        RETURNING *`;
-      await billing.book(tx, {
-        teacherId: input.teacherId,
-        serverId: null,
-        type: "payout",
-        amountMinor: -input.amountMinor,
-        currency,
-        payoutId: id,
-        ref: `payout:${id}`,
-        note: input.whopReference,
-      });
-      return row!;
-    });
-    reply.code(201);
-    return toPayout(payout);
+  /** Student payments to the teacher's Whop account (read-only; refunds and payouts happen in Whop). */
+  app.get("/sales", { preHandler: requireAuth }, async (req): Promise<Sale[]> => {
+    const rows = await sql`
+      SELECT p.*, o.name AS offer_name, s.name AS server_name, u.display_name, u.username
+      FROM payments p
+      LEFT JOIN offers o ON o.id = p.offer_id
+      LEFT JOIN servers s ON s.id = p.server_id
+      LEFT JOIN users u ON u.id = p.user_id
+      WHERE p.kind = 'offer' AND p.teacher_user_id = ${req.userId}
+      ORDER BY p.created_at DESC LIMIT 500`;
+    return rows.map((r) => ({
+      id: r.id,
+      offerName: r.offerName ?? null,
+      serverName: r.serverName ?? null,
+      student: r.userId ? { id: r.userId, displayName: r.displayName, username: r.username } : null,
+      currency: r.currency,
+      totalMinor: num(r.totalMinor),
+      refundedMinor: num(r.refundedMinor),
+      status: r.status,
+      createdAt: iso(r.createdAt)!,
+    }));
   });
 }
 
@@ -475,9 +345,7 @@ export function whopWebhookRoutes(app: FastifyInstance, ctx: Ctx & { billing: Bi
   const { sql, billing } = ctx;
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => done(null, body));
 
-  app.post("/webhooks/whop", async (req, reply) => {
-    const secret = config.whop.webhookSecret;
-    if (!secret) return reply.code(503).send({ error: "webhooks_not_configured" });
+  async function receive(req: FastifyRequest, reply: FastifyReply, secret: string, source: WebhookSource, accountId?: string) {
     const raw = typeof req.body === "string" ? req.body : "";
     let id: string;
     try {
@@ -486,20 +354,38 @@ export function whopWebhookRoutes(app: FastifyInstance, ctx: Ctx & { billing: Bi
       if (err instanceof WebhookSignatureError) return reply.code(401).send({ error: "invalid_signature" });
       throw err;
     }
-    const event = JSON.parse(raw) as { type: string; data: unknown };
+    const event = JSON.parse(raw) as { type: string; data: unknown; account_id?: string; company_id?: string };
+    const from = event.account_id ?? event.company_id;
+    if (accountId && from && from !== accountId) return reply.code(400).send({ error: "wrong_account" });
+    // Webhook ids are unique per endpoint; namespace them so two endpoints can't collide.
+    const key = source.kind === "platform" ? id : `${source.connectionId}:${id}`;
     const inserted = await sql`
-      INSERT INTO webhook_events (id, type) VALUES (${id}, ${event.type})
+      INSERT INTO webhook_events (id, type) VALUES (${key}, ${event.type})
       ON CONFLICT (id) DO UPDATE SET error = webhook_events.error
       RETURNING processed_at`;
     if (inserted[0]?.processedAt) return { ok: true, duplicate: true };
     try {
-      await billing.handleEvent(event);
-      await sql`UPDATE webhook_events SET processed_at = now(), error = NULL WHERE id = ${id}`;
+      await billing.handleEvent(event, source);
+      await sql`UPDATE webhook_events SET processed_at = now(), error = NULL WHERE id = ${key}`;
     } catch (err) {
-      req.log.error({ err, webhookId: id, type: event.type }, "whop webhook failed");
-      await sql`UPDATE webhook_events SET error = ${String((err as Error).message).slice(0, 500)} WHERE id = ${id}`;
+      req.log.error({ err, webhookId: key, type: event.type }, "whop webhook failed");
+      await sql`UPDATE webhook_events SET error = ${String((err as Error).message).slice(0, 500)} WHERE id = ${key}`;
       return reply.code(500).send({ error: "processing_failed" }); // Whop retries
     }
     return { ok: true };
+  }
+
+  /** Majlis's own account: teacher plans. */
+  app.post("/webhooks/whop", async (req, reply) => {
+    const secret = config.whop.webhookSecret;
+    if (!secret) return reply.code(503).send({ error: "webhooks_not_configured" });
+    return receive(req, reply, secret, { kind: "platform" }, config.whop.accountId ?? undefined);
+  });
+
+  /** A teacher's own account: purchases of that teacher's offers. */
+  app.post<{ Params: { connectionId: string } }>("/webhooks/whop/:connectionId", async (req, reply) => {
+    const conn = await billing.connectionForWebhook(req.params.connectionId);
+    if (!conn) return reply.code(404).send({ error: "unknown_connection" });
+    return receive(req, reply, conn.secret, { kind: "connection", connectionId: conn.id, teacherId: conn.teacherId }, conn.accountId);
   });
 }
