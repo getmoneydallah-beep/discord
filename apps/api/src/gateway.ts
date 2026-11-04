@@ -11,6 +11,8 @@ interface Conn {
   displayName: string;
   servers: Set<string>;
   lastTyping: Map<string, number>;
+  /** Deliveries are chained so access checks never reorder events on one socket. */
+  chain: Promise<unknown>;
 }
 
 /**
@@ -23,6 +25,40 @@ export function registerGateway(app: FastifyInstance, deps: { bus: Bus; repo: Re
   const byUser = new Map<string, Set<Conn>>();
   const byServer = new Map<string, Set<Conn>>();
   const channelServer = new Map<string, string>(); // small cache for typing checks
+
+  // Paid channels: only members who can open the channel get its real-time
+  // events. Results are cached briefly per user+channel and dropped on
+  // ACCESS_UPDATE / CHANNEL_UPDATE.
+  const ACCESS_TTL = 60_000;
+  const accessCache = new Map<string, { ok: boolean; at: number }>();
+  async function allowed(userId: string, channelId: string): Promise<boolean> {
+    const key = `${userId}:${channelId}`;
+    const hit = accessCache.get(key);
+    if (hit && Date.now() - hit.at < ACCESS_TTL) return hit.ok;
+    let ok = false;
+    try {
+      const channel = await repo.getChannel(channelId);
+      ok = await repo.canAccessChannel(channel, userId, await repo.membership(channel.serverId, userId));
+    } catch {
+      ok = false;
+    }
+    if (accessCache.size > 50_000) accessCache.clear();
+    accessCache.set(key, { ok, at: Date.now() });
+    return ok;
+  }
+  const channelOf = (e: ServerEvent): string | null => {
+    switch (e.t) {
+      case "MESSAGE_CREATE":
+      case "MESSAGE_UPDATE":
+      case "MESSAGE_DELETE":
+      case "REACTION_ADD":
+      case "REACTION_REMOVE":
+      case "TYPING_START":
+        return e.d.channelId;
+      default:
+        return null;
+    }
+  };
 
   const add = <K>(map: Map<K, Set<Conn>>, key: K, c: Conn) => {
     let set = map.get(key);
@@ -64,7 +100,16 @@ export function registerGateway(app: FastifyInstance, deps: { bus: Bus; repo: Re
     } else {
       for (const u of scope.userIds) for (const c of byUser.get(u) ?? []) targets.add(c);
     }
-    for (const c of targets) send(c, event);
+    const channelId = channelOf(event);
+    for (const c of targets) {
+      c.chain = c.chain
+        .then(async () => {
+          if (!channelId || (await allowed(c.userId, channelId))) send(c, event);
+        })
+        .catch(() => {});
+    }
+
+    if (event.t === "ACCESS_UPDATE" || event.t === "CHANNEL_UPDATE") accessCache.clear();
 
     if (event.t === "MEMBER_REMOVE") {
       for (const c of byUser.get(event.d.userId) ?? []) unsubscribe(c, event.d.serverId);
@@ -106,7 +151,7 @@ export function registerGateway(app: FastifyInstance, deps: { bus: Bus; repo: Re
     const me = await repo.getUser(userId);
     if (!me) return ws.close(4001, "unauthorized");
 
-    const conn: Conn = { ws, userId, displayName: me.displayName, servers: new Set(), lastTyping: new Map() };
+    const conn: Conn = { ws, userId, displayName: me.displayName, servers: new Set(), lastTyping: new Map(), chain: Promise.resolve() };
     const serverIds = await repo.userServerIds(userId);
     add(byUser, userId, conn);
     for (const s of serverIds) subscribe(conn, s);

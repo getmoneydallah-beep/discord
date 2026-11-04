@@ -12,6 +12,8 @@ export interface Me extends User {
   email: string;
   locale: Locale;
   createdAt: string;
+  /** Majlis staff: can see the owner Payouts page. */
+  isPlatformAdmin?: boolean;
 }
 
 export interface Server {
@@ -30,6 +32,10 @@ export interface Channel {
   parentId: string | null;
   position: number;
   topic: string | null;
+  /** "paid" channels/courses are only open to holders of an offer that unlocks them. */
+  access: "free" | "paid";
+  /** True when the viewer cannot open this channel's content (it is paid and they hold no offer for it). */
+  locked: boolean;
 }
 
 export interface Member {
@@ -92,6 +98,10 @@ export interface LessonSummary {
   hasVideo: boolean;
   attachmentCount: number;
   completed: boolean;
+  /** Visitors without access can watch this lesson. */
+  freePreview: boolean;
+  /** The viewer can't open this lesson. */
+  locked: boolean;
 }
 
 export interface CourseSection {
@@ -119,6 +129,8 @@ export interface Course {
   totalDurationSeconds: number;
   sections: CourseSection[];
   progress: CourseProgress;
+  access: "free" | "paid";
+  locked: boolean;
 }
 
 export interface Lesson {
@@ -136,6 +148,7 @@ export interface Lesson {
   positionSeconds: number;
   prevLessonId: string | null;
   nextLessonId: string | null;
+  freePreview: boolean;
 }
 
 export interface Invite {

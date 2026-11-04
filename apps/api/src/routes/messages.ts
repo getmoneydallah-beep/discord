@@ -14,14 +14,14 @@ export function messageRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get<{ Params: { id: string }; Querystring: { before?: string; limit?: string } }>(
     "/channels/:id/messages",
     async (req) => {
-      const { channel } = await repo.channelAccess(req.params.id, req.userId);
+      const { channel } = await repo.channelContentAccess(req.params.id, req.userId);
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
       return repo.messages({ channelId: channel.id, before: req.query.before, limit, viewerId: req.userId });
     },
   );
 
   app.post<{ Params: { id: string } }>("/channels/:id/messages", async (req, reply) => {
-    const { channel, role } = await repo.channelAccess(req.params.id, req.userId);
+    const { channel, role } = await repo.channelContentAccess(req.params.id, req.userId);
     if (channel.type !== "text" || !can(role, "message.send")) throw forbidden();
     sendLimit(req.userId);
     const input = sendMessageSchema.parse(req.body);
@@ -88,7 +88,7 @@ export function messageRoutes(app: FastifyInstance, ctx: Ctx) {
   app.put<{ Params: { id: string; emoji: string } }>("/messages/:id/reactions/:emoji", async (req, reply) => {
     const emoji = emojiSchema.parse(req.params.emoji);
     const m = await repo.message(req.params.id, req.userId);
-    await repo.requireMember(m.serverId, req.userId);
+    await repo.channelContentAccess(m.channelId, req.userId);
     reactLimit(req.userId);
     const inserted = await sql`
       INSERT INTO reactions (message_id, user_id, emoji) VALUES (${m.id}, ${req.userId}, ${emoji})

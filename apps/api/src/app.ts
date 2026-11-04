@@ -16,12 +16,22 @@ import { localStorage, r2Storage, type Storage } from "./storage";
 import { authRoutes } from "./routes/auth";
 import { messageRoutes } from "./routes/messages";
 import { serverRoutes } from "./routes/servers";
+import { billingRoutes, whopWebhookRoutes } from "./routes/billing";
+import { createBilling } from "./billing";
+import { createWhop, type WhopApi } from "./whop";
 
 export interface BuildOptions {
   sql: Sql;
   bus?: Bus;
   storage?: Storage;
   logger?: boolean;
+  /** Whop client; null disables checkout. Defaults to one built from WHOP_* env vars. */
+  whop?: WhopApi | null;
+}
+
+export function createWhopFromEnv(): WhopApi | null {
+  const { apiKey, accountId, env } = config.whop;
+  return apiKey && accountId ? createWhop({ apiKey, accountId, env }) : null;
 }
 
 export function createStorage(): Storage {
@@ -30,7 +40,13 @@ export function createStorage(): Storage {
     : localStorage({ dir: config.storageDir, secret: config.jwtSecret, baseUrl: config.publicUrl });
 }
 
-export async function buildApp({ sql, bus = createBus(config.redisUrl), storage = createStorage(), logger = true }: BuildOptions) {
+export async function buildApp({
+  sql,
+  bus = createBus(config.redisUrl),
+  storage = createStorage(),
+  logger = true,
+  whop = createWhopFromEnv(),
+}: BuildOptions) {
   const app = Fastify({
     logger: logger ? { level: config.isProd ? "info" : "debug" } : false,
     trustProxy: true, // behind Fly's proxy / Cloudflare
@@ -59,6 +75,8 @@ export async function buildApp({ sql, bus = createBus(config.redisUrl), storage 
   const files = createFiles(sql, storage);
   const repo = createRepo(sql, files);
   const gateway = registerGateway(app, { bus, repo });
+  const emit: Ctx["emit"] = (scope, event) => bus.publish({ scope, event });
+  const billing = createBilling({ sql, whop, webUrl: config.webUrl, holdDays: config.payoutHoldDays, emit, log: app.log });
   const ctx: Ctx = {
     sql,
     repo,
@@ -67,7 +85,9 @@ export async function buildApp({ sql, bus = createBus(config.redisUrl), storage 
     bus,
     gateway,
     webUrl: config.webUrl,
-    emit: (scope, event) => bus.publish({ scope, event }),
+    emit,
+    whop,
+    billing,
   };
 
   app.get("/health", async () => {
@@ -87,6 +107,12 @@ export async function buildApp({ sql, bus = createBus(config.redisUrl), storage 
   });
   await app.register(async (scoped) => {
     courseRoutes(scoped, ctx);
+  });
+  await app.register(async (scoped) => {
+    billingRoutes(scoped, ctx);
+  });
+  await app.register(async (scoped) => {
+    whopWebhookRoutes(scoped, ctx);
   });
   if ("register" in storage) await (storage as ReturnType<typeof localStorage>).register(app);
 

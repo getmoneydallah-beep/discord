@@ -28,6 +28,8 @@ export type ServerEvent =
   | { t: "SERVER_CREATE"; d: Server }
   | { t: "SERVER_UPDATE"; d: Server }
   | { t: "SERVER_DELETE"; d: { id: string } }
+  /** The viewer's access in a server changed (purchase, refund, grant, channel made paid/free): refetch it. */
+  | { t: "ACCESS_UPDATE"; d: { serverId: string } }
   | { t: "PONG" };
 
 export interface ReactionEvent {

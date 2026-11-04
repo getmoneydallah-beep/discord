@@ -9,6 +9,7 @@ import {
   normalizeArabic,
   outranks,
   setRoleSchema,
+  TIERS,
   type Invite,
 } from "@majlis/shared";
 import { requireAuth } from "../auth";
@@ -42,6 +43,10 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.post("/servers", async (req, reply) => {
     const { name } = createServerSchema.parse(req.body);
+    const tier = await repo.tierOf(req.userId);
+    const [{ owned } = { owned: 0 }] = await sql<{ owned: number }[]>`
+      SELECT count(*)::int AS owned FROM servers WHERE owner_id = ${req.userId}`;
+    if (owned >= TIERS[tier].maxOwnedServers) throw new HttpError(403, "tier_limit_servers");
     const serverId = newId();
     await sql.begin(async (tx) => {
       await tx`INSERT INTO servers (id, name, owner_id) VALUES (${serverId}, ${name}, ${req.userId})`;
@@ -247,7 +252,8 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get<{ Params: { id: string }; Querystring: { q?: string } }>("/servers/:id/search", async (req) => {
     const serverId = req.params.id;
-    await repo.requireMember(serverId, req.userId);
+    const role = await repo.requireMember(serverId, req.userId);
+    const locked = [...(await repo.lockedChannelIds(serverId, req.userId, role))];
     // Arabic-aware: normalise the query exactly like stored content, then prefix-match each word.
     const terms = normalizeArabic(req.query.q ?? "")
       .split(" ")
@@ -259,6 +265,7 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
     const rows = await sql<{ id: string }[]>`
       SELECT m.id FROM messages m JOIN channels c ON c.id = m.channel_id
       WHERE c.server_id = ${serverId} AND m.search @@ to_tsquery('simple', ${tsquery})
+        AND NOT (c.id = ANY(${locked}))
       ORDER BY m.id DESC LIMIT 25`;
     if (rows.length === 0) return [];
     return repo.messages({ ids: rows.map((r) => r.id), viewerId: req.userId, limit: 25 });

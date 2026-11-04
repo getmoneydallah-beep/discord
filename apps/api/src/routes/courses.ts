@@ -3,6 +3,7 @@ import {
   can,
   courseOrderSchema,
   lessonSchema,
+  lessonPreviewSchema,
   newId,
   parseVideoEmbed,
   progressSchema,
@@ -16,7 +17,7 @@ import {
 } from "@majlis/shared";
 import { requireAuth } from "../auth";
 import type { Ctx } from "../context";
-import { badRequest, forbidden, notFound } from "../errors";
+import { badRequest, forbidden, HttpError, notFound } from "../errors";
 import { uploadJson, type UploadRow } from "../files";
 import { toChannel } from "../repo";
 
@@ -33,14 +34,16 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
     const { channel, role } = await repo.channelAccess(courseId, userId);
     if (channel.type !== "course") throw notFound("course_not_found");
     if (manage && !can(role, "channel.manage")) throw forbidden();
-    return { channel, role };
+    // The outline of a paid course stays visible (it's what's for sale); lessons are locked.
+    const locked = !(await repo.canAccessChannel(channel, userId, role));
+    return { channel, role, locked };
   }
 
   async function lessonAccess(lessonId: string, userId: string, manage = false) {
     const [row] = await sql`SELECT * FROM lessons WHERE id = ${lessonId}`;
     if (!row) throw notFound("lesson_not_found");
     const access = await courseAccess(row.courseId, userId, manage);
-    return { lesson: row, ...access };
+    return { lesson: row, ...access, lessonLocked: access.locked && !row.freePreview };
   }
 
   async function sectionAccess(sectionId: string, userId: string) {
@@ -55,7 +58,7 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
   /** Ordered lessons of a course with the viewer's progress. */
   async function lessonList(courseId: string, userId: string) {
     return sql<(LessonSummary & { progressAt: Date | null })[]>`
-      SELECT l.id, l.section_id, l.title, l.position, l.duration_seconds,
+      SELECT l.id, l.section_id, l.title, l.position, l.duration_seconds, l.free_preview,
              (l.video_upload_id IS NOT NULL OR l.video_url IS NOT NULL) AS has_video,
              (SELECT count(*)::int FROM lesson_attachments a WHERE a.lesson_id = l.id) AS attachment_count,
              (p.completed_at IS NOT NULL) AS completed,
@@ -68,7 +71,7 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
   }
 
   async function buildCourse(courseId: string, userId: string): Promise<Course> {
-    const { channel } = await courseAccess(courseId, userId);
+    const { channel, locked } = await courseAccess(courseId, userId);
     const [meta] = await sql`
       SELECT c.description, CASE WHEN u.id IS NULL THEN NULL ELSE ${sql.unsafe(uploadJson)} END AS cover
       FROM courses c LEFT JOIN uploads u ON u.id = c.cover_upload_id
@@ -82,7 +85,11 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
       position: s.position,
       lessons: lessons
         .filter((l) => l.sectionId === s.id)
-        .map(({ progressAt: _, ...l }) => ({ ...l, durationSeconds: l.durationSeconds ?? null })),
+        .map(({ progressAt: _, ...l }) => ({
+          ...l,
+          durationSeconds: l.durationSeconds ?? null,
+          locked: locked && !l.freePreview,
+        })),
     }));
     const last = lessons
       .filter((l) => l.progressAt)
@@ -102,11 +109,15 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
         nextLessonId: (lessons.find((l) => !l.completed) ?? lessons[0])?.id ?? null,
         lastLessonId: last?.id ?? null,
       },
+      access: channel.access,
+      locked,
     };
   }
 
   async function buildLesson(lessonId: string, userId: string): Promise<Lesson> {
-    const { lesson, channel } = await lessonAccess(lessonId, userId);
+    const { lesson, channel, lessonLocked } = await lessonAccess(lessonId, userId);
+    // No signed file links are issued without access.
+    if (lessonLocked) throw new HttpError(403, "locked");
     const [video] = lesson.videoUploadId
       ? await sql<UploadRow[]>`SELECT * FROM uploads WHERE id = ${lesson.videoUploadId}`
       : [];
@@ -131,6 +142,7 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
       positionSeconds: progress?.positionSeconds ?? 0,
       prevLessonId: order[i - 1] ?? null,
       nextLessonId: order[i + 1] ?? null,
+      freePreview: lesson.freePreview,
     };
   }
 
@@ -295,9 +307,19 @@ export function courseRoutes(app: FastifyInstance, ctx: Ctx) {
     return buildCourse(channel.id, req.userId);
   });
 
+  /** Marks a lesson of a paid course as a free preview (or not). */
+  app.put<{ Params: { id: string } }>("/lessons/:id/preview", async (req) => {
+    const { lesson, channel } = await lessonAccess(req.params.id, req.userId, true);
+    const { freePreview } = lessonPreviewSchema.parse(req.body);
+    await sql`UPDATE lessons SET free_preview = ${freePreview}, updated_at = now() WHERE id = ${lesson.id}`;
+    await changed(channel.id, channel.serverId);
+    return buildLesson(lesson.id, req.userId);
+  });
+
   /** Saves watch position / completion for the current user. */
   app.put<{ Params: { id: string } }>("/lessons/:id/progress", async (req, reply) => {
-    const { lesson } = await lessonAccess(req.params.id, req.userId);
+    const { lesson, lessonLocked } = await lessonAccess(req.params.id, req.userId);
+    if (lessonLocked) throw new HttpError(403, "locked");
     const input = progressSchema.parse(req.body);
     const completed = input.completed;
     await sql`

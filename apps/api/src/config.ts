@@ -29,6 +29,22 @@ export const config = {
       }
     : null,
   storageDir: process.env.STORAGE_DIR ?? ".uploads",
+  /** Whop (payments). Without WHOP_API_KEY, billing endpoints answer 503 "billing_unavailable". */
+  whop: {
+    env: (process.env.WHOP_ENV === "production" ? "production" : "sandbox") as "sandbox" | "production",
+    apiKey: process.env.WHOP_API_KEY || null,
+    accountId: process.env.WHOP_ACCOUNT_ID || null,
+    webhookSecret: process.env.WHOP_WEBHOOK_SECRET || null,
+  },
+  /** Earnings stay pending this many days (refund window) before they can be paid out. */
+  payoutHoldDays: Number(process.env.PAYOUT_HOLD_DAYS ?? 14),
+  /** Minimum available balance (minor units, e.g. 10000 = 100.00 SAR) before a payout is suggested. */
+  payoutMinMinor: Number(process.env.PAYOUT_MIN_MINOR ?? 10_000),
+  /** Emails of Majlis staff who can open the owner Payouts page. */
+  platformAdminEmails: (process.env.PLATFORM_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
 };
 
 // Local disk storage in production is only allowed when explicitly requested
