@@ -90,7 +90,21 @@ The API tests start the real server and drive the REST API and the WebSocket gat
 | Web | Vercel | Root directory `apps/web`, env `NEXT_PUBLIC_API_URL=https://api.majlis.app` |
 | iOS / Android | Expo EAS | `cd apps/mobile && eas build --profile production` then `eas submit` |
 
-First API deploy:
+**Live now:** web <https://majlis-web.fly.dev>, API <https://majlis-sa-api.fly.dev> (Fly.io `fra`). Until R2 is configured, the API stores uploads on a 3 GB Fly volume (`majlis_data`), so it runs as a single machine (`--ha=false`).
+
+Redeploy after changes (from the repo root):
+
+```bash
+fly deploy --config apps/api/fly.toml --ha=false
+```
+
+```bash
+fly deploy --config apps/web/fly.toml
+```
+
+If deploys hang at "Waiting for remote builder" behind a corporate/agent proxy, add `--depot=false` and run `fly wireguard websockets enable` once.
+
+First API deploy (fresh account):
 
 ```bash
 fly apps create majlis-api

@@ -1,6 +1,6 @@
 # Fly.io config for the Majlis API + WebSocket gateway.
-# Deploy from the repo root:  fly deploy --config apps/api/fly.toml
-app = "majlis-api"
+# Deploy from the repo root:  fly deploy --config apps/api/fly.toml --ha=false
+app = "majlis-sa-api"
 
 # Fly has no region inside Saudi Arabia. Frankfurt is the closest well-connected
 # region (~80-120 ms to Riyadh/Jeddah) and matches Neon + Upstash eu-central-1.
@@ -16,13 +16,22 @@ primary_region = "fra"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
-  WEB_URL = "https://majlis.app"
-  CORS_ORIGINS = "https://majlis.app,https://www.majlis.app"
+  PUBLIC_API_URL = "https://majlis-sa-api.fly.dev"
+  WEB_URL = "https://majlis-web.fly.dev"
+  CORS_ORIGINS = "https://majlis-web.fly.dev"
+  # Until Cloudflare R2 is configured, uploads live on the persistent volume below.
+  # When adding R2_* secrets, remove these two lines and the [mounts] section.
+  ALLOW_LOCAL_STORAGE = "true"
+  STORAGE_DIR = "/data/uploads"
+
+[mounts]
+  source = "majlis_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  # Long-lived WebSockets: keep machines running, never scale to zero.
+  # Long-lived WebSockets: keep the machine running, never scale to zero.
   auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1

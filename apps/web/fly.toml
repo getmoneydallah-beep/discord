@@ -1,0 +1,22 @@
+# Fly.io config for the Majlis web app (Next.js standalone).
+# Deploy from the repo root:  fly deploy --config apps/web/fly.toml
+app = "majlis-web"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+  [build.args]
+    NEXT_PUBLIC_API_URL = "https://majlis-sa-api.fly.dev"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # The web app is stateless: stop when idle, start on the first request (~1s).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

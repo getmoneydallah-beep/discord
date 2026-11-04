@@ -31,8 +31,10 @@ export const config = {
   storageDir: process.env.STORAGE_DIR ?? ".uploads",
 };
 
-if (isProd && !config.r2) {
-  throw new Error("R2_* env vars are required in production (local file storage is for development only)");
+// Local disk storage in production is only allowed when explicitly requested
+// (e.g. a single Fly machine with a persistent volume, before R2 is set up).
+if (isProd && !config.r2 && process.env.ALLOW_LOCAL_STORAGE !== "true") {
+  throw new Error("R2_* env vars are required in production (or set ALLOW_LOCAL_STORAGE=true with a persistent volume)");
 }
 
 if (isProd && config.jwtSecret.length < 32) {

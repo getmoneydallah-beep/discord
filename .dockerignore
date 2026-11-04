@@ -3,6 +3,6 @@
 **/dist
 **/.turbo
 **/.expo
-apps/web
+**/.uploads
 apps/mobile
 .git

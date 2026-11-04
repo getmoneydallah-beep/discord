@@ -17,6 +17,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/apps/api/dist ./dist
 COPY --from=build /repo/apps/api/migrations ./migrations
-USER node
+# Runs as root so it can write to a mounted Fly volume (/data) when R2 isn't configured.
 EXPOSE 8080
 CMD ["node", "dist/index.js"]
