@@ -91,8 +91,12 @@ export class ApiClient {
   leaveServer = (id: string) => this.request<void>("DELETE", `/servers/${id}/members/@me`);
 
   // Channels
-  createChannel = (serverId: string, input: { name: string; type?: "text" | "category"; parentId?: string | null; topic?: string }) =>
-    this.request<Channel>("POST", `/servers/${serverId}/channels`, input);
+  createChannel = (
+    serverId: string,
+    input: { name: string; type?: "text" | "category" | "course"; parentId?: string | null; topic?: string; description?: string; postPolicy?: "everyone" | "staff" },
+  ) => this.request<Channel>("POST", `/servers/${serverId}/channels`, input);
+  updateChannel = (channelId: string, input: { name?: string; topic?: string | null; postPolicy?: "everyone" | "staff" }) =>
+    this.request<Channel>("PATCH", `/channels/${channelId}`, input);
   deleteChannel = (channelId: string) => this.request<void>("DELETE", `/channels/${channelId}`);
 
   // Members & moderation

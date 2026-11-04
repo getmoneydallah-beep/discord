@@ -9,7 +9,7 @@ import { useUi } from "@/lib/ui";
 import { Button, cx } from "../ui";
 import { CourseOutline, ProgressBar, useNum } from "./CourseOutline";
 import { CourseEditor } from "./CourseEditor";
-import { AccessToggle, LockedPanel } from "../pay/shared";
+import { ChannelHeaderTools, LockedPanel } from "../pay/shared";
 
 /**
  * The course landing page. Learners see one obvious next step (Start /
@@ -59,10 +59,10 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
           {course.name}
         </h1>
         <div className="flex-1" />
-        {channel && <AccessToggle channel={channel} />}
+        {channel && <ChannelHeaderTools channel={channel} />}
         {canEdit && (
           <Button variant={editing ? "primary" : "ghost"} onClick={() => setEditing((e) => !e)} className="py-1">
-            {editing ? t("course.doneEditing") : `✏️ ${t("course.edit")}`}
+            {editing ? `👁 ${t("course.studentView")}` : `✏️ ${t("course.edit")}`}
           </Button>
         )}
       </header>

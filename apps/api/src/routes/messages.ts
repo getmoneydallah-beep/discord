@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { can, editMessageSchema, emojiSchema, newId, normalizeArabic, reportSchema, sendMessageSchema } from "@majlis/shared";
 import { requireAuth } from "../auth";
 import type { Ctx } from "../context";
-import { badRequest, forbidden } from "../errors";
+import { badRequest, forbidden, HttpError } from "../errors";
 import { createLimiter } from "../ratelimit";
 
 export function messageRoutes(app: FastifyInstance, ctx: Ctx) {
@@ -23,6 +23,7 @@ export function messageRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post<{ Params: { id: string } }>("/channels/:id/messages", async (req, reply) => {
     const { channel, role } = await repo.channelContentAccess(req.params.id, req.userId);
     if (channel.type !== "text" || !can(role, "message.send")) throw forbidden();
+    if (channel.postPolicy === "staff" && role === "member") throw new HttpError(403, "staff_only");
     sendLimit(req.userId);
     const input = sendMessageSchema.parse(req.body);
     if (!input.content && input.attachmentIds.length === 0) throw badRequest("empty_message");

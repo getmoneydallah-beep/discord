@@ -342,3 +342,30 @@ describe("R2 presigning", () => {
     expect(new URL(a).searchParams.get("response-content-disposition")).toContain("attachment");
   });
 });
+
+describe("announcement channels and channel settings", () => {
+  it("lets only the owner and admins post in a staff-only channel; members can still react", async () => {
+    const ch = await api<{ id: string; postPolicy: string }>("POST", `/servers/${serverId}/channels`, owner.token, { name: "إعلانات", postPolicy: "staff" });
+    expect(ch.status).toBe(201);
+    expect(ch.body.postPolicy).toBe("staff");
+    const denied = await api("POST", `/channels/${ch.body.id}/messages`, student.token, { content: "مرحبا" });
+    expect(denied.status).toBe(403);
+    expect(denied.body.error).toBe("staff_only");
+    const post = await api<Message>("POST", `/channels/${ch.body.id}/messages`, owner.token, { content: "الدرس القادم يوم الأحد" });
+    expect(post.status).toBe(201);
+    expect((await api("GET", `/channels/${ch.body.id}/messages`, student.token)).status).toBe(200);
+    expect((await api("PUT", `/messages/${post.body.id}/reactions/${encodeURIComponent("👍")}`, student.token)).status).toBe(204);
+  });
+
+  it("renames, sets the topic and switches who can post; members can't", async () => {
+    const r = await api<{ name: string; topic: string; postPolicy: string }>("PATCH", `/channels/${chatChannel}`, owner.token, {
+      name: "النقاش العام", topic: "اسأل أي سؤال", postPolicy: "staff",
+    });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ name: "النقاش-العام", topic: "اسأل أي سؤال", postPolicy: "staff" });
+    expect((await api("POST", `/channels/${chatChannel}/messages`, student.token, { content: "x" })).status).toBe(403);
+    expect((await api("PATCH", `/channels/${chatChannel}`, student.token, { postPolicy: "everyone" })).status).toBe(403);
+    await api("PATCH", `/channels/${chatChannel}`, owner.token, { postPolicy: "everyone" });
+    expect((await api("POST", `/channels/${chatChannel}/messages`, student.token, { content: "x" })).status).toBe(201);
+  });
+});

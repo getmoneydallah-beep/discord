@@ -34,6 +34,8 @@ export interface Channel {
   access: "free" | "paid";
   /** True when the viewer cannot open this channel's content (it is paid and they hold no offer for it). */
   locked: boolean;
+  /** "staff": announcements, only the owner and admins can post. */
+  postPolicy: "everyone" | "staff";
 }
 
 export interface Member {

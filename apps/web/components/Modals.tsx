@@ -8,17 +8,20 @@ import { parseInviteCode } from "@majlis/api-client";
 import { actions, api, errorMessage, useApp, useT } from "@/lib/store";
 import { useUi } from "@/lib/ui";
 import { Button, Input, Modal } from "./ui";
+import { ChannelSettingsModal, CreateChannelModal } from "./ChannelModals";
 
 export function Modals() {
   const modal = useUi((s) => s.modal);
+  const modalArg = useUi((s) => s.modalArg);
   const close = () => useUi.getState().openModal(null);
   return (
     <>
       {modal === "createServer" && <CreateServer onClose={close} />}
       {modal === "joinServer" && <JoinServer onClose={close} />}
       {modal === "invite" && <InviteModal onClose={close} />}
-      {modal === "createChannel" && <CreateChannel onClose={close} />}
-      {modal === "createCourse" && <CreateCourse onClose={close} />}
+      {modal === "createChannel" && <CreateChannelModal onClose={close} />}
+      {modal === "createCourse" && <CreateChannelModal onClose={close} initial="course" />}
+      {modal === "channelSettings" && modalArg && <ChannelSettingsModal channelId={modalArg} onClose={close} />}
       {modal === "settings" && <Settings onClose={close} />}
     </>
   );
@@ -48,7 +51,7 @@ function CreateServer({ onClose }: { onClose: () => void }) {
   const { error, busy, onSubmit } = useSubmit(async (f) => {
     const d = await actions.createServer(String(f.get("name")));
     onClose();
-    router.push(`/s/${d.server.id}/${d.channels[0]?.id ?? ""}`);
+    router.push(`/s/${d.server.id}/manage`);
   });
   return (
     <Modal open onClose={onClose} title={t("server.create")}>
@@ -121,70 +124,6 @@ function InviteModal({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
       {copied && <p className="text-sm text-success">{t("server.inviteCopied")}</p>}
-    </Modal>
-  );
-}
-
-function CreateChannel({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  const router = useRouter();
-  const { serverId } = useParams<{ serverId: string }>();
-  const { error, busy, onSubmit } = useSubmit(async (f) => {
-    const c = await actions.createChannel(serverId, String(f.get("name")));
-    onClose();
-    router.push(`/s/${serverId}/${c.id}`);
-  });
-  return (
-    <Modal open onClose={onClose} title={t("channel.create")}>
-      <form onSubmit={onSubmit} className="space-y-4">
-        <Input name="name" label={t("channel.name")} required maxLength={100} autoFocus dir="auto" />
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button disabled={busy}>{t("common.create")}</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function CreateCourse({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  const router = useRouter();
-  const { serverId } = useParams<{ serverId: string }>();
-  const { error, busy, onSubmit } = useSubmit(async (f) => {
-    const c = await api.createCourse(serverId, {
-      name: String(f.get("name")),
-      description: String(f.get("description") ?? ""),
-    });
-    actions.applyChannel(c);
-    onClose();
-    router.push(`/s/${serverId}/${c.id}?edit=1`);
-  });
-  return (
-    <Modal open onClose={onClose} title={t("course.create")}>
-      <form onSubmit={onSubmit} className="space-y-4">
-        <Input name="name" label={t("course.name")} required maxLength={100} autoFocus dir="auto" />
-        <label className="block space-y-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">{t("course.description")}</span>
-          <textarea
-            name="description"
-            dir="auto"
-            rows={3}
-            maxLength={5000}
-            className="w-full rounded-lg border border-line bg-bg px-3 py-2 outline-none focus:border-brand"
-          />
-        </label>
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button disabled={busy}>{t("common.create")}</Button>
-        </div>
-      </form>
     </Modal>
   );
 }

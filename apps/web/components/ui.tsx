@@ -102,3 +102,52 @@ export function Splash({ label }: { label: string }) {
     </div>
   );
 }
+
+/** A big selectable card (radio-like) with an icon, title and one-line explanation. */
+export function OptionCard({
+  selected,
+  onSelect,
+  icon,
+  title,
+  hint,
+  disabled,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  icon: React.ReactNode;
+  title: string;
+  hint?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      disabled={disabled}
+      onClick={onSelect}
+      className={cx(
+        "flex w-full items-start gap-3 rounded-xl border-2 p-3 text-start transition disabled:cursor-not-allowed disabled:opacity-50",
+        selected ? "border-brand bg-brand/10" : "border-line hover:border-brand/50",
+      )}
+    >
+      <span className="text-2xl leading-none">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold">{title}</span>
+        {hint && <span className="block text-sm text-muted">{hint}</span>}
+      </span>
+      <span
+        className={cx(
+          "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+          selected ? "border-brand bg-brand text-[10px] text-white" : "border-line",
+        )}
+      >
+        {selected && "✓"}
+      </span>
+    </button>
+  );
+}
+
+export function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="block text-xs font-semibold uppercase tracking-wide text-muted">{children}</span>;
+}

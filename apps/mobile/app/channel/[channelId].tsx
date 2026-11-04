@@ -245,6 +245,14 @@ export default function ChannelScreen() {
           </View>
         )}
 
+        {channel?.postPolicy === "staff" && myRole === "member" ? (
+          <View style={{ padding: spacing.lg, paddingBottom: Math.max(insets.bottom, spacing.lg), borderTopWidth: 1, borderTopColor: p.border }}>
+            <T muted style={{ textAlign: "center" }}>
+              {t("channel.readOnly")}
+            </T>
+          </View>
+        ) : (
+        <>
         <PendingChips items={uploads.items} onRemove={uploads.remove} />
         <View
           style={{
@@ -309,6 +317,8 @@ export default function ChannelScreen() {
             <T style={{ color: "#fff", transform: [{ scaleX: locale === "ar" ? -1 : 1 }] }}>➤</T>
           </Pressable>
         </View>
+        </>
+        )}
       </KeyboardAvoidingView>
     </Screen>
   );

@@ -6,6 +6,7 @@ import type { Channel, Offer } from "@majlis/shared";
 import { formatMoney } from "@majlis/i18n";
 import { actions, api, errorMessage, useApp, useLocale, useT } from "@/lib/store";
 import { Button, cx } from "../ui";
+import { useUi } from "@/lib/ui";
 
 export function useMoney() {
   const locale = useLocale();
@@ -108,36 +109,33 @@ export function OfferCard({ offer }: { offer: Offer }) {
   );
 }
 
-/** Admin switch between free and paid for a channel or course. */
-export function AccessToggle({ channel }: { channel: Channel }) {
+/** Header badges (paid, announcements) and, for staff, the channel settings gear. */
+export function ChannelHeaderTools({ channel }: { channel: Channel }) {
   const t = useT();
   const myRole = useApp((s) => s.serverState[channel.serverId]?.myRole ?? "member");
-  const [error, setError] = useState<string | null>(null);
-  if (myRole === "member") {
-    return channel.access === "paid" ? <span className="text-sm" title={t("pay.paid")}>🔒</span> : null;
-  }
-  const paid = channel.access === "paid";
+  const openModal = useUi((s) => s.openModal);
   return (
-    <span className="flex items-center gap-2">
-      {error && <span className="text-xs text-danger">{error}</span>}
-      <button
-        onClick={async () => {
-          setError(null);
-          try {
-            await api.setChannelAccess(channel.id, paid ? "free" : "paid");
-            await actions.refreshAccess(channel.serverId);
-          } catch (e) {
-            setError(errorMessage(e));
-          }
-        }}
-        className={cx(
-          "rounded-md border px-2 py-1 text-xs font-medium",
-          paid ? "border-brand/40 bg-brand/10 text-brand" : "border-line text-muted hover:text-fg",
-        )}
-        title={paid ? t("pay.makeFree") : t("pay.makePaid")}
-      >
-        {paid ? `🔒 ${t("pay.paid")}` : t("pay.makePaid")}
-      </button>
+    <span className="flex items-center gap-1">
+      {channel.access === "paid" && (
+        <span className="rounded-md bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand" title={t("channel.seePaid")}>
+          🔒 {t("pay.paid")}
+        </span>
+      )}
+      {channel.postPolicy === "staff" && (
+        <span className="rounded-md bg-surface px-2 py-0.5 text-xs text-muted" title={t("channel.postStaff")}>
+          📢 {t("channel.typeAnnouncements")}
+        </span>
+      )}
+      {myRole !== "member" && (
+        <button
+          onClick={() => openModal("channelSettings", channel.id)}
+          className="rounded-md px-2 py-1 text-muted hover:bg-surface hover:text-fg"
+          title={t("channel.settings")}
+          aria-label={t("channel.settings")}
+        >
+          ⚙
+        </button>
+      )}
     </span>
   );
 }

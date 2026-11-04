@@ -40,6 +40,7 @@ export const toChannel = (r: Row, locked = false): Channel => ({
   topic: r.topic ?? null,
   access: r.access ?? "free",
   locked,
+  postPolicy: r.postPolicy ?? "everyone",
 });
 
 /** Entitlement statuses that open content. past_due keeps access during Whop's retry window. */

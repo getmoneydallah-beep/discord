@@ -10,6 +10,7 @@ import {
   outranks,
   setRoleSchema,
   TIERS,
+  updateChannelSchema,
   type Invite,
 } from "@majlis/shared";
 import { requireAuth } from "../auth";
@@ -97,8 +98,9 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
     const name = input.type === "course" ? input.name.trim().slice(0, 100) : channelName(input.name);
     const row = await sql.begin(async (tx) => {
       const [created] = await tx`
-        INSERT INTO channels (id, server_id, name, type, parent_id, position, topic)
-        VALUES (${newId()}, ${serverId}, ${name}, ${input.type}, ${input.parentId ?? null}, ${next}, ${input.topic ?? null})
+        INSERT INTO channels (id, server_id, name, type, parent_id, position, topic, post_policy)
+        VALUES (${newId()}, ${serverId}, ${name}, ${input.type}, ${input.parentId ?? null}, ${next}, ${input.topic ?? null},
+                ${input.type === "text" ? input.postPolicy : "everyone"})
         RETURNING *`;
       if (input.type === "course") {
         await tx`INSERT INTO courses (id, description) VALUES (${created!.id}, ${input.description ?? ""})`;
@@ -109,6 +111,24 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
     await emit({ serverIds: [serverId] }, { t: "CHANNEL_CREATE", d: channel });
     reply.code(201);
     return channel;
+  });
+
+  /** Channel settings: name, topic, who can post. */
+  app.patch<{ Params: { id: string } }>("/channels/:id", async (req) => {
+    const { channel, role } = await repo.channelAccess(req.params.id, req.userId);
+    if (!can(role, "channel.manage")) throw forbidden();
+    const input = updateChannelSchema.parse(req.body);
+    const name =
+      input.name === undefined ? channel.name : channel.type === "course" ? input.name.trim().slice(0, 100) : channelName(input.name);
+    const [row] = await sql`
+      UPDATE channels SET
+        name = ${name},
+        topic = ${input.topic !== undefined ? input.topic || null : channel.topic},
+        post_policy = ${channel.type === "text" ? (input.postPolicy ?? channel.postPolicy) : "everyone"}
+      WHERE id = ${channel.id} RETURNING *`;
+    const updated = toChannel(row!);
+    await emit({ serverIds: [channel.serverId] }, { t: "CHANNEL_UPDATE", d: updated });
+    return { ...updated, locked: false };
   });
 
   app.delete<{ Params: { id: string } }>("/channels/:id", async (req, reply) => {

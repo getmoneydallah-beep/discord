@@ -8,7 +8,7 @@ import { useUi } from "@/lib/ui";
 import { MessageItem } from "./MessageItem";
 import { Composer } from "./Composer";
 import { SearchBox } from "./SearchBox";
-import { AccessToggle, LockedPanel } from "./pay/shared";
+import { ChannelHeaderTools, LockedPanel } from "./pay/shared";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -17,6 +17,7 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
   const channel = useApp((s) => s.serverState[serverId]?.channels.find((c) => c.id === channelId));
   const data = useApp((s) => s.messages[channelId]);
   const typing = useApp((s) => s.typing[channelId]);
+  const myRole = useApp((s) => s.serverState[serverId]?.myRole ?? "member");
   const setNav = useUi((s) => s.setNav);
   const toggleMembers = useUi((s) => s.toggleMembers);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -67,7 +68,7 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
         </h1>
         {channel.topic && <span className="hidden truncate text-sm text-muted md:inline">{channel.topic}</span>}
         <div className="flex-1" />
-        <AccessToggle channel={channel} />
+        <ChannelHeaderTools channel={channel} />
         <SearchBox serverId={serverId} />
         <button onClick={toggleMembers} className="hidden p-1 text-muted hover:text-fg lg:block" title={t("server.members")}>
           👥
@@ -116,6 +117,9 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
         {typers.length > 1 && t("message.typingMany")}
       </div>
 
+      {channel.postPolicy === "staff" && myRole === "member" ? (
+        <div className="m-3 rounded-lg bg-surface px-4 py-3 text-center text-sm text-muted">{t("channel.readOnly")}</div>
+      ) : (
       <Composer
         channelId={channelId}
         serverId={serverId}
@@ -127,6 +131,7 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
           setReplyTo(null);
         }}
       />
+      )}
       </>
       )}
     </>

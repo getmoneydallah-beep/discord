@@ -137,8 +137,8 @@ export default function ServerScreen() {
                 backgroundColor: pressed ? p.surfaceHover : "transparent",
               })}
             >
-              <T muted size={20}>
-                #
+              <T muted size={item.channel.postPolicy === "staff" ? 16 : 20}>
+                {item.channel.postPolicy === "staff" ? "📢" : "#"}
               </T>
               <T style={{ flex: 1 }}>{item.channel.name}</T>
               {item.channel.locked && <T size={14}>🔒</T>}

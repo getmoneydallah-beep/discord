@@ -50,6 +50,14 @@ export const createChannelSchema = z.object({
   topic: z.string().trim().max(1024).optional(),
   /** Course channels only. */
   description: z.string().trim().max(5000).optional(),
+  /** "staff" = announcements: only the owner and admins can post. */
+  postPolicy: z.enum(["everyone", "staff"]).default("everyone"),
+});
+
+export const updateChannelSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  topic: z.string().trim().max(1024).nullable().optional(),
+  postPolicy: z.enum(["everyone", "staff"]).optional(),
 });
 
 export const sendMessageSchema = z.object({
