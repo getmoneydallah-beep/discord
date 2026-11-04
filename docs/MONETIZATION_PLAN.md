@@ -92,6 +92,10 @@ entitlements          (id, user_id, offer_id, source: whop|manual|coupon, whop_m
 coupons               (id, server_id, code, percent_off|amount_off, max_uses, expires_at, whop_promo_id)
 payments_log          (id, server_id, user_id, offer_id, whop_payment_id, amount, fee, status, raw jsonb)
 webhook_events        (id, provider, event_id UNIQUE, type, received_at, processed_at)   -- prevents processing an event twice
+ledger_entries        (id, teacher_user_id, server_id, type: sale|whop_fee|platform_fee|refund|chargeback|payout|adjustment,
+                       amount_minor (+/-), currency, payment_id, payout_id, available_at, created_at)   -- append-only
+payouts               (id, teacher_user_id, amount_minor, currency, period_start, period_end,
+                       status: draft|sent|failed, whop_reference, sent_by, sent_at, note)
 ```
 
 ### Enforcement (server-side, never trusted to the client)
