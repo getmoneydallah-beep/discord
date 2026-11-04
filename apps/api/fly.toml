@@ -20,6 +20,8 @@ primary_region = "fra"
   PUBLIC_API_URL = "https://majlis-sa-api.fly.dev"
   WEB_URL = "https://majlis-web.fly.dev"
   CORS_ORIGINS = "https://majlis-web.fly.dev"
+  # Fly's edge proxy appends the real client IP to X-Forwarded-For; trust exactly that one hop.
+  TRUST_PROXY_HOPS = "1"
   # Files and course videos are stored in Cloudflare R2 (bucket "majlis-media",
   # location EEUR). Credentials are Fly secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
   # R2_SECRET_ACCESS_KEY, R2_BUCKET.

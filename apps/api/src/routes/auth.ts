@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { loginSchema, registerSchema, updateMeSchema, newId } from "@majlis/shared";
-import { hashPassword, requireAuth, signToken, verifyPassword } from "../auth";
+import { dummyPasswordHash, hashPassword, requireAuth, signToken, verifyPassword } from "../auth";
 import type { Ctx } from "../context";
 import { HttpError } from "../errors";
 import { createLimiter } from "../ratelimit";
@@ -21,6 +21,8 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
     return `user_${newId().slice(-10).toLowerCase()}`;
   }
   const authLimit = createLimiter(10, 60_000);
+  // Per account, whatever IP the attempts come from (password guessing from many IPs).
+  const accountLimit = createLimiter(10, 15 * 60_000);
 
   app.post("/auth/register", async (req, reply) => {
     authLimit(`ip:${req.ip}`);
@@ -48,10 +50,11 @@ export function authRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post("/auth/login", async (req) => {
     authLimit(`ip:${req.ip}`);
     const input = loginSchema.parse(req.body);
+    accountLimit(`email:${input.email}`);
     const [row] = await sql`SELECT * FROM users WHERE email = ${input.email}`;
-    if (!row || !(await verifyPassword(input.password, row.passwordHash))) {
-      throw new HttpError(401, "invalid_credentials");
-    }
+    // Always run one scrypt so response time doesn't reveal whether the email exists.
+    const ok = await verifyPassword(input.password, row ? row.passwordHash : await dummyPasswordHash());
+    if (!row || !ok) throw new HttpError(401, "invalid_credentials");
     return { token: await signToken(row.id), user: toMe(row) };
   });
 

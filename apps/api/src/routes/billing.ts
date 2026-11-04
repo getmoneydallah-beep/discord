@@ -58,7 +58,11 @@ export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billin
     };
   });
 
+  // Each checkout calls Whop's API; cap how fast one account can create them.
+  const checkoutLimit = createLimiter(10, 60_000);
+
   app.post("/billing/checkout", { preHandler: requireAuth }, async (req) => {
+    checkoutLimit(req.userId);
     const { tier, interval } = teacherCheckoutSchema.parse(req.body);
     return billing.teacherCheckout(req.userId, tier, interval);
   });
@@ -206,9 +210,10 @@ export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billin
     reply.code(204);
   });
 
-  app.post<{ Params: { id: string } }>("/offers/:id/checkout", { preHandler: requireAuth }, async (req) =>
-    billing.offerCheckout(req.userId, req.params.id),
-  );
+  app.post<{ Params: { id: string } }>("/offers/:id/checkout", { preHandler: requireAuth }, async (req) => {
+    checkoutLimit(req.userId);
+    return billing.offerCheckout(req.userId, req.params.id);
+  });
 
   /* --------------------------- free / paid content --------------------------- */
 

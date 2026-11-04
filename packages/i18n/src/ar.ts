@@ -382,6 +382,7 @@ export const ar = {
     whop_key_rejected: "Whop رفض هذا المفتاح. تأكد أنك نسخته كاملاً",
     invalid_whop_key: "المفتاح يجب أن يبدأ بـ apik_",
     whop_account_in_use: "حساب Whop هذا مربوط بمعلم آخر",
+    storage_quota_exceeded: "امتلأت مساحة التخزين في خطة هذا المجلس",
     checkout_failed: "تعذّر فتح صفحة الدفع",
     invalid_credentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
     email_taken: "البريد الإلكتروني مستخدم بالفعل",

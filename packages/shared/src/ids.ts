@@ -24,3 +24,14 @@ export function idTimestamp(id: string): number {
   for (const ch of id.slice(0, 10)) t = t * 32 + ALPHABET.indexOf(ch);
   return t;
 }
+
+/**
+ * Only same-site paths are allowed as post-login redirects ("/s", "/invite/x?join=1").
+ * Anything else (absolute URLs, protocol-relative "//evil", "/\\evil", javascript:) falls back.
+ */
+export function safeNextPath(next: string | null | undefined, fallback = "/s"): string {
+  if (!next || typeof next !== "string") return fallback;
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
+  if (/[\u0000-\u001f\\]/.test(next)) return fallback;
+  return next;
+}

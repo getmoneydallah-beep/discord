@@ -51,7 +51,16 @@ function InviteCard() {
   useEffect(() => {
     if (status === "ready" && autoJoin && invite && !tried.current) {
       tried.current = true;
-      void join();
+      // Only auto-join right after signing up / logging in from this invite in this tab;
+      // a crafted ?join=1 link sent to a logged-in user just shows the card.
+      let pending: string | null = null;
+      try {
+        pending = sessionStorage.getItem("majlis.pendingJoin");
+        sessionStorage.removeItem("majlis.pendingJoin");
+      } catch {
+        /* private mode */
+      }
+      if (pending === code) void join();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, autoJoin, invite]);

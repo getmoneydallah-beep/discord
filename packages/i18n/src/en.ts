@@ -386,6 +386,7 @@ export const en: Shape<typeof ar> = {
     whop_key_rejected: "Whop rejected this key. Make sure you copied all of it",
     invalid_whop_key: "The key must start with apik_",
     whop_account_in_use: "This Whop account is connected to another teacher",
+    storage_quota_exceeded: "This majlis has used all the storage in its plan",
     checkout_failed: "Couldn't open checkout",
     invalid_credentials: "Wrong email or password",
     email_taken: "That email is already registered",

@@ -32,7 +32,7 @@ export function createFiles(sql: Sql, storage: Storage) {
       size: Number(row.size),
       kind: row.kind,
       // Plain files download with their original (possibly Arabic) name; media plays inline.
-      url: await storage.presignGet(row.storageKey, { filename: row.filename, download: row.kind === "file" }),
+      url: await storage.presignGet(row.storageKey, { filename: row.filename, download: row.kind === "file", contentType: row.contentType }),
     };
   }
 

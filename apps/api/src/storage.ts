@@ -17,7 +17,7 @@ export interface Storage {
   /** URL the client PUTs the raw bytes to. */
   presignPut(key: string, contentType: string): Promise<{ url: string; headers: Record<string, string> }>;
   /** Short-lived URL to view or download the object. */
-  presignGet(key: string, opts?: { filename?: string; download?: boolean }): Promise<string>;
+  presignGet(key: string, opts?: { filename?: string; download?: boolean; contentType?: string }): Promise<string>;
   /** Object size in bytes, or null if it doesn't exist. */
   head(key: string): Promise<number | null>;
   delete(key: string): Promise<void>;
@@ -66,6 +66,8 @@ export function r2Storage(cfg: { accountId: string; accessKeyId: string; secretA
       const url = new URL(objectUrl(key));
       url.searchParams.set("X-Amz-Expires", String(GET_TTL));
       if (opts.filename) url.searchParams.set("response-content-disposition", contentDisposition(opts.filename, !!opts.download));
+      // Serve the type we validated at upload time, not whatever header the uploader sent with the bytes.
+      if (opts.contentType) url.searchParams.set("response-content-type", opts.contentType);
       const signed = await aws.sign(url.toString(), {
         method: "GET",
         aws: { signQuery: true, datetime: amzDate(hourBucket()) },
@@ -111,10 +113,10 @@ export function localStorage(opts: { dir: string; secret: string; baseUrl: strin
   const urlFor = (key: string, params: Record<string, string>) =>
     `${baseUrl}/storage/${key.split("/").map(encodeURIComponent).join("/")}?${new URLSearchParams(params)}`;
 
-  const verify = (method: string, key: string, q: Record<string, string | undefined>) => {
+  const verify = (method: string, key: string, q: Record<string, string | undefined>, extra = q.dl ?? "") => {
     const exp = Number(q.exp);
     if (!q.sig || !exp || exp < Date.now() / 1000) return false;
-    const expected = Buffer.from(sign(method, key, exp, q.dl ?? ""));
+    const expected = Buffer.from(sign(method, key, exp, extra));
     const got = Buffer.from(q.sig);
     return expected.length === got.length && timingSafeEqual(expected, got);
   };
@@ -126,7 +128,8 @@ export function localStorage(opts: { dir: string; secret: string; baseUrl: strin
     },
     async presignPut(key, contentType) {
       const exp = Math.floor(Date.now() / 1000) + PUT_TTL;
-      return { url: urlFor(key, { exp: String(exp), sig: sign("PUT", key, exp) }), headers: { "content-type": contentType } };
+      // The declared content type is part of the signature: a PUT with any other type is rejected.
+      return { url: urlFor(key, { exp: String(exp), sig: sign("PUT", key, exp, contentType) }), headers: { "content-type": contentType } };
     },
     async presignGet(key, o = {}) {
       const exp = Math.floor(hourBucket() / 1000) + GET_TTL;
@@ -153,7 +156,8 @@ export function localStorage(opts: { dir: string; secret: string; baseUrl: strin
 
         scoped.put<{ Params: { "*": string }; Querystring: Record<string, string> }>("/storage/*", async (req, reply) => {
           const key = req.params["*"];
-          if (!verify("PUT", key, req.query)) return reply.code(403).send({ error: "invalid_signature" });
+          const contentType = String(req.headers["content-type"] ?? "");
+          if (!verify("PUT", key, req.query, contentType)) return reply.code(403).send({ error: "invalid_signature" });
           const file = pathFor(key);
           await mkdir(dirname(file), { recursive: true });
           let bytes = 0;
@@ -164,7 +168,7 @@ export function localStorage(opts: { dir: string; secret: string; baseUrl: strin
             },
           });
           await pipeline(req.body as Readable, limit, createWriteStream(file));
-          await writeFile(`${file}.meta`, JSON.stringify({ contentType: req.headers["content-type"] ?? "application/octet-stream" }));
+          await writeFile(`${file}.meta`, JSON.stringify({ contentType }));
           return reply.code(200).send();
         });
 

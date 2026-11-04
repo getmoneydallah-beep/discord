@@ -29,6 +29,12 @@ export function uploadRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!purposeAccepts(input.purpose, input.contentType)) throw badRequest("invalid_file_type");
     limit(req.userId);
 
+    // Storage is paid for by the majlis owner's plan; members' attachments count too.
+    const { limits } = await repo.serverOwnerTier(serverId);
+    const [{ used } = { used: 0 }] = await sql<{ used: string }[]>`
+      SELECT COALESCE(SUM(size), 0) AS used FROM uploads WHERE server_id = ${serverId}`;
+    if (Number(used) + input.size > limits.storageGb * 1024 ** 3) throw new HttpError(413, "storage_quota_exceeded");
+
     const id = newId();
     const key = storageKey(serverId, id, input.filename);
     const [row] = await sql<UploadRow[]>`

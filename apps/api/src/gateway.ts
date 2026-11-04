@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import type { ClientEvent, ServerEvent } from "@majlis/shared";
-import { verifyToken } from "./auth";
+import { authenticate } from "./auth";
 import type { Bus, Envelope } from "./bus";
 import type { Repo } from "./repo";
 
@@ -136,6 +136,11 @@ export function registerGateway(app: FastifyInstance, deps: { bus: Bus; repo: Re
         channelServer.set(channelId, serverId);
       }
       if (!c.servers.has(serverId)) return;
+      // Only people who can post here may show as typing (not in locked or announcement-only channels).
+      const channel = await repo.getChannel(channelId).catch(() => null);
+      const role = channel ? await repo.membership(channel.serverId, c.userId) : null;
+      if (!channel || !role || (channel.postPolicy === "staff" && role === "member")) return;
+      if (!(await repo.canAccessChannel(channel, c.userId, role))) return;
       await bus.publish({
         scope: { serverIds: [serverId] },
         event: { t: "TYPING_START", d: { channelId, serverId, userId: c.userId, displayName: c.displayName } },
@@ -145,7 +150,7 @@ export function registerGateway(app: FastifyInstance, deps: { bus: Bus; repo: Re
 
   app.get("/gateway", { websocket: true }, async (ws, req) => {
     const token = (req.query as { token?: string }).token;
-    const userId = token ? await verifyToken(token) : null;
+    const userId = await authenticate(token);
     if (!userId) return ws.close(4001, "unauthorized");
 
     const me = await repo.getUser(userId);

@@ -17,6 +17,12 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   webUrl: process.env.WEB_URL ?? "http://localhost:3000",
+  /**
+   * How many reverse proxies sit in front of the API (Fly.io's edge = 1).
+   * Only that many X-Forwarded-For hops are trusted, so clients can't spoof
+   * their IP to dodge rate limits. 0 = trust none (local dev, tests).
+   */
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 0),
   /** Public URL of this API (used for local-storage file URLs). */
   publicUrl: process.env.PUBLIC_API_URL ?? `http://localhost:${process.env.PORT ?? 4000}`,
   /** Cloudflare R2. When unset, files are stored on local disk (dev only). */
@@ -53,6 +59,10 @@ if (isProd && !config.r2 && process.env.ALLOW_LOCAL_STORAGE !== "true") {
 
 if (isProd && !/^[0-9a-f]{64}$/i.test(config.keysEncryptionKey)) {
   throw new Error("WHOP_KEYS_ENCRYPTION_KEY (64 hex chars) is required in production");
+}
+
+if (isProd && config.corsOrigins.length === 0) {
+  throw new Error("CORS_ORIGINS is required in production (an empty list would allow any origin)");
 }
 
 if (isProd && config.jwtSecret.length < 32) {

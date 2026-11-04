@@ -20,6 +20,7 @@ import { billingRoutes, whopWebhookRoutes } from "./routes/billing";
 import { createBilling } from "./billing";
 import { createWhop, createWhopConnector, WhopError, type WhopApi, type WhopConnector } from "./whop";
 import { createSecretBox } from "./crypto";
+import { setUserExistsCheck } from "./auth";
 
 export interface BuildOptions {
   sql: Sql;
@@ -30,6 +31,11 @@ export interface BuildOptions {
   whop?: WhopApi | null;
   /** Builds clients for teachers' own Whop accounts from their pasted keys. */
   connector?: WhopConnector | null;
+}
+
+/** Removes bearer tokens from URLs before they reach the logs (the gateway takes ?token=). */
+export function redactUrl(url: string): string {
+  return url.replace(/([?&]token=)[^&#]*/g, "$1[redacted]");
 }
 
 export function createWhopFromEnv(): WhopApi | null {
@@ -53,9 +59,21 @@ export async function buildApp({
 }: BuildOptions) {
   const app = Fastify({
     logger: logger
-      ? { level: config.isProd ? "info" : "debug", redact: ["req.headers.authorization", "req.body.apiKey", "apiKey"] }
+      ? {
+          level: config.isProd ? "info" : "debug",
+          redact: ["req.headers.authorization", "req.body.apiKey", "apiKey"],
+          serializers: {
+            req: (req: { method: string; url: string; hostname?: string; ip?: string }) => ({
+              method: req.method,
+              url: redactUrl(req.url),
+              hostname: req.hostname,
+              remoteAddress: req.ip,
+            }),
+          },
+        }
       : false,
-    trustProxy: true, // behind Fly's proxy / Cloudflare
+    // Trust only the known proxy hops (Fly's edge); a blanket `true` lets clients spoof X-Forwarded-For.
+    trustProxy: config.trustProxyHops > 0 ? (_addr: string, hop: number) => hop < config.trustProxyHops : false,
     bodyLimit: 1024 * 1024,
   });
 
@@ -64,6 +82,15 @@ export async function buildApp({
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   });
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
+
+  // Security headers on every API response (JSON and dev-storage files alike).
+  app.addHook("onSend", async (_req, reply) => {
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("x-frame-options", "DENY");
+    reply.header("referrer-policy", "no-referrer");
+    reply.header("cross-origin-resource-policy", "cross-origin"); // media is loaded by the web app's origin
+    if (config.isProd) reply.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+  });
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) {
@@ -82,6 +109,7 @@ export async function buildApp({
     return reply.code(500).send({ error: "internal_error" });
   });
 
+  setUserExistsCheck(async (id) => (await sql`SELECT 1 FROM users WHERE id = ${id}`).length > 0);
   const files = createFiles(sql, storage);
   const repo = createRepo(sql, files);
   const gateway = registerGateway(app, { bus, repo });

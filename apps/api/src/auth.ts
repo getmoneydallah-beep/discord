@@ -53,11 +53,34 @@ declare module "fastify" {
   }
 }
 
+/**
+ * Set by buildApp: does this user still exist? Tokens of deleted accounts are
+ * rejected even though their signature is still valid.
+ */
+let userExists: ((id: string) => Promise<boolean>) | null = null;
+export function setUserExistsCheck(fn: (id: string) => Promise<boolean>) {
+  userExists = fn;
+}
+
+/** Resolves a token to a live user id, or null. */
+export async function authenticate(token: string | null | undefined): Promise<string | null> {
+  const userId = token ? await verifyToken(token) : null;
+  if (!userId) return null;
+  if (userExists && !(await userExists(userId))) return null;
+  return userId;
+}
+
 /** preHandler: requires a valid Bearer token and sets request.userId. */
 export async function requireAuth(req: FastifyRequest) {
   const header = req.headers.authorization;
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
-  const userId = token ? await verifyToken(token) : null;
+  const userId = await authenticate(token);
   if (!userId) throw new HttpError(401, "unauthorized");
   req.userId = userId;
+}
+
+/** A real scrypt hash of a random password, so unknown emails cost the same time as wrong passwords. */
+let dummyHash: Promise<string> | null = null;
+export function dummyPasswordHash() {
+  return (dummyHash ??= hashPassword(randomBytes(16).toString("hex")));
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { safeNextPath } from "./ids";
 import { detectDirection, normalizeArabic, toEasternDigits, toWesternDigits } from "./arabic";
 import { idTimestamp, newId } from "./ids";
 import { can, outranks } from "./permissions";
@@ -87,5 +88,17 @@ describe("video embeds", () => {
     expect(fileKind("application/pdf")).toBe("file");
     expect(formatDuration(247)).toBe("4:07");
     expect(formatDuration(3909)).toBe("1:05:09");
+  });
+});
+
+describe("safeNextPath (open redirect guard)", () => {
+  it("keeps same-site paths", () => {
+    expect(safeNextPath("/s")).toBe("/s");
+    expect(safeNextPath("/invite/AbC123?join=1")).toBe("/invite/AbC123?join=1");
+  });
+  it("rejects external, protocol-relative and script URLs", () => {
+    for (const bad of ["https://evil.example", "//evil.example", "/\\evil.example", "javascript:alert(1)", "evil", "", null, undefined, "/\tfoo", "/s\\..\\x"]) {
+      expect(safeNextPath(bad as string)).toBe("/s");
+    }
   });
 });

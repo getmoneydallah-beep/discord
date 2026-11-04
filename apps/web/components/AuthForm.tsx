@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { safeNextPath } from "@majlis/shared";
 import { actions, api, errorMessage, useApp, useT } from "@/lib/store";
 import { Button, Input } from "./ui";
 import { LanguageToggle } from "./LanguageToggle";
@@ -11,7 +12,8 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const t = useT();
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/s";
+  // Never redirect off-site after login (open redirect).
+  const next = safeNextPath(params.get("next"));
   const status = useApp((s) => s.status);
   const locale = useApp((s) => s.prefs.locale);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,14 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               password: String(f.get("password")),
               locale,
             });
+      // Lets the invite page auto-join only when the visitor came through this form (not a crafted ?join=1 link).
+      if (inviteCode) {
+        try {
+          sessionStorage.setItem("majlis.pendingJoin", inviteCode);
+        } catch {
+          /* private mode */
+        }
+      }
       await actions.signIn(res.token, res.user);
     } catch (err) {
       setError(errorMessage(err));
