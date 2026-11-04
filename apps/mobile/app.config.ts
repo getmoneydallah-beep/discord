@@ -12,8 +12,9 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: "app.majlis",
     supportsTablet: true,
-    // Universal links: https://majlis.app/invite/CODE opens the app.
-    associatedDomains: ["applinks:majlis.app"],
+    // Universal links (https://majlis.app/invite/CODE opens the app) need a paid Apple
+    // developer account and the real domain, so they're only added for store builds.
+    ...(process.env.MAJLIS_UNIVERSAL_LINKS === "1" ? { associatedDomains: ["applinks:majlis.app"] } : {}),
     infoPlist: {
       CFBundleDevelopmentRegion: "ar",
       CFBundleLocalizations: ["ar", "en"],

@@ -87,7 +87,7 @@ Mobile (in another terminal):
 pnpm dev:mobile               # Expo dev server; press i (iOS sim) / a (Android) or scan with Expo Go
 ```
 
-On a physical phone, set `EXPO_PUBLIC_API_URL=http://<your-LAN-ip>:4000` before starting Expo.
+The mobile app talks to the live API (`https://majlis-sa-api.fly.dev`) by default. To use a local API on a physical phone, set `EXPO_PUBLIC_API_URL=http://<your-LAN-ip>:4000` before starting Expo.
 
 ### Tests
 

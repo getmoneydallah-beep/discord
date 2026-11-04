@@ -14,7 +14,8 @@ const storage: TokenStorage = {
   remove: (k) => SecureStore.deleteItemAsync(k),
 };
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+// The live API unless a build sets EXPO_PUBLIC_API_URL (e.g. http://<your-LAN-ip>:4000 for local development).
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://majlis-sa-api.fly.dev";
 
 // Arabic first; English only if the device language is English.
 const deviceLocale: Locale = getLocales()[0]?.languageCode === "en" ? "en" : "ar";

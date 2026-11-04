@@ -1,19 +1,31 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "development": {
       "developmentClient": false,
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_URL": "http://localhost:4000" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:4000"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_URL": "https://majlis-api.fly.dev" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://majlis-sa-api.fly.dev"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.majlis.app" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://majlis-sa-api.fly.dev",
+        "MAJLIS_UNIVERSAL_LINKS": "1"
+      }
     }
   },
-  "submit": { "production": {} }
+  "submit": {
+    "production": {}
+  }
 }
