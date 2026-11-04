@@ -16,6 +16,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const locale = useApp((s) => s.prefs.locale);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showUsername, setShowUsername] = useState(false);
+  const [joining, setJoining] = useState<string | null>(null);
+  // Coming from an invite link: show which majlis they're about to join.
+  const inviteCode = next.match(/^\/invite\/([^/?]+)/)?.[1];
+  useEffect(() => {
+    if (inviteCode) api.getInvite(inviteCode).then((inv) => setJoining(inv.serverName), () => undefined);
+  }, [inviteCode]);
 
   useEffect(() => {
     if (status === "ready") router.replace(next);
@@ -32,7 +39,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           ? await api.login({ email: String(f.get("email")), password: String(f.get("password")) })
           : await api.register({
               email: String(f.get("email")),
-              username: String(f.get("username")),
+              username: String(f.get("username") ?? ""),
               displayName: String(f.get("displayName")),
               password: String(f.get("password")),
               locale,
@@ -57,12 +64,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </div>
           <LanguageToggle />
         </div>
+        {joining && (
+          <div className="flex items-center gap-3 rounded-xl bg-brand/10 p-3 text-sm">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand font-bold text-white">{[...joining][0]}</span>
+            <span className="font-medium" dir="auto">
+              {t("auth.joiningTitle", { name: joining })}
+            </span>
+          </div>
+        )}
         <form onSubmit={onSubmit} className="space-y-4">
           <Input name="email" type="email" dir="ltr" label={t("auth.email")} required autoComplete="email" />
           {mode === "register" && (
             <>
-              <Input name="displayName" label={t("auth.displayName")} required maxLength={64} dir="auto" />
-              <Input name="username" dir="ltr" label={t("auth.username")} required pattern="[a-zA-Z0-9_.]{3,32}" autoComplete="username" />
+              <Input name="displayName" label={t("auth.displayName")} required maxLength={64} dir="auto" autoComplete="name" />
             </>
           )}
           <Input
@@ -74,6 +88,18 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             minLength={mode === "register" ? 8 : 1}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
+          {mode === "register" && <p className="-mt-2 text-xs text-muted">{t("auth.passwordHint")}</p>}
+          {mode === "register" &&
+            (showUsername ? (
+              <div className="space-y-1">
+                <Input name="username" dir="ltr" label={t("auth.username")} pattern="[a-zA-Z0-9_.]{3,32}" autoComplete="username" autoFocus />
+                <p className="text-xs text-muted">{t("auth.usernameHint")}</p>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setShowUsername(true)} className="text-xs text-brand hover:underline">
+                + {t("auth.usernameOptional")}
+              </button>
+            ))}
           {error && <p className="text-sm text-danger">{error}</p>}
           <Button type="submit" disabled={busy} className="w-full">
             {mode === "login" ? t("auth.login") : t("auth.register")}

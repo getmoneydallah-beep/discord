@@ -8,21 +8,38 @@ import { toMe } from "../repo";
 
 export function authRoutes(app: FastifyInstance, ctx: Ctx) {
   const { sql } = ctx;
+
+  /** "Khalid.M+test@gmail.com" → "khalid.m_4821" (unique, matches the username rules). */
+  async function generateUsername(email: string) {
+    let base = email.split("@")[0]!.toLowerCase().replace(/[^a-z0-9_.]/g, "").slice(0, 20);
+    if (base.length < 3) base = `user${base}`;
+    for (let i = 0; i < 20; i++) {
+      const candidate = `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
+      const [taken] = await sql`SELECT 1 FROM users WHERE username = ${candidate}`;
+      if (!taken) return candidate;
+    }
+    return `user_${newId().slice(-10).toLowerCase()}`;
+  }
   const authLimit = createLimiter(10, 60_000);
 
   app.post("/auth/register", async (req, reply) => {
     authLimit(`ip:${req.ip}`);
     const input = registerSchema.parse(req.body);
-    const taken = await sql<{ email: string; username: string }[]>`
-      SELECT email, username FROM users WHERE email = ${input.email} OR username = ${input.username}`;
-    if (taken.some((r) => r.email.toLowerCase() === input.email)) throw new HttpError(409, "email_taken");
-    if (taken.length) throw new HttpError(409, "username_taken");
+    const [emailTaken] = await sql`SELECT 1 FROM users WHERE email = ${input.email}`;
+    if (emailTaken) throw new HttpError(409, "email_taken");
+    let username = input.username;
+    if (username) {
+      const [taken] = await sql`SELECT 1 FROM users WHERE username = ${username}`;
+      if (taken) throw new HttpError(409, "username_taken");
+    } else {
+      username = await generateUsername(input.email);
+    }
 
     const id = newId();
     const passwordHash = await hashPassword(input.password);
     const [row] = await sql`
       INSERT INTO users (id, email, username, display_name, password_hash, locale)
-      VALUES (${id}, ${input.email}, ${input.username}, ${input.displayName}, ${passwordHash}, ${input.locale})
+      VALUES (${id}, ${input.email}, ${username}, ${input.displayName}, ${passwordHash}, ${input.locale})
       RETURNING *`;
     reply.code(201);
     return { token: await signToken(id), user: toMe(row!) };

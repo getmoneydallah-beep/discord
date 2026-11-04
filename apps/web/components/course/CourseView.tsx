@@ -111,7 +111,7 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
                   </p>
                 )}
 
-                {total > 0 && (
+                {total > 0 && !course.locked && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className={cx(finished && "font-bold text-success")}>

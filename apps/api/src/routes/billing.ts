@@ -14,6 +14,7 @@ import {
   type Sale,
   type TeacherTier,
   type WhopConnectionInfo,
+  type MyEntitlement,
 } from "@majlis/shared";
 import { requireAuth } from "../auth";
 import type { Billing, WebhookSource } from "../billing";
@@ -253,6 +254,30 @@ export function billingRoutes(app: FastifyInstance, ctx: Ctx & { billing: Billin
     const role = await repo.requireMember(req.params.id, req.userId);
     if (role === "member") return entitlementRows(sql`e.server_id = ${req.params.id} AND e.user_id = ${req.userId}`);
     return entitlementRows(sql`e.server_id = ${req.params.id}`);
+  });
+
+  /** Everything the viewer holds, across all their majlises (Settings → My subscriptions). */
+  app.get("/me/entitlements", { preHandler: requireAuth }, async (req) => {
+    const rows = await sql`
+      SELECT e.*, o.name AS offer_name, o.billing, o.price_minor, o.currency, s.name AS server_name
+      FROM entitlements e JOIN offers o ON o.id = e.offer_id JOIN servers s ON s.id = e.server_id
+      WHERE e.user_id = ${req.userId}
+      ORDER BY (e.status IN ('active', 'trialing', 'past_due')) DESC, e.updated_at DESC
+      LIMIT 200`;
+    return rows.map((r) => ({
+      id: r.id,
+      offerId: r.offerId,
+      offerName: r.offerName,
+      serverId: r.serverId,
+      serverName: r.serverName,
+      source: r.source,
+      status: r.status,
+      billing: r.billing,
+      priceMinor: num(r.priceMinor),
+      currency: r.currency,
+      startsAt: iso(r.startsAt)!,
+      endsAt: iso(r.endsAt),
+    })) satisfies MyEntitlement[];
   });
 
   /** Manual access: scholarships, gifts, students who paid by bank transfer. */

@@ -33,7 +33,11 @@ function channelName(name: string) {
 
 export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
   const { sql, repo, emit } = ctx;
-  app.addHook("preHandler", requireAuth);
+  // Everything needs a login except previewing an invite (the logged-out invite page).
+  app.addHook("preHandler", async (req) => {
+    if (req.method === "GET" && req.routeOptions.url === "/invites/:code") return;
+    await requireAuth(req);
+  });
 
   app.get("/servers", async (req) => {
     const rows = await sql`
@@ -211,7 +215,8 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
   async function inviteInfo(code: string): Promise<Invite | null> {
     const [row] = await sql`
       SELECT i.*, s.name AS server_name,
-        (SELECT count(*)::int FROM server_members m WHERE m.server_id = i.server_id) AS member_count
+        (SELECT count(*)::int FROM server_members m WHERE m.server_id = i.server_id) AS member_count,
+        (SELECT count(*)::int FROM channels c WHERE c.server_id = i.server_id AND c.type = 'course') AS course_count
       FROM invites i JOIN servers s ON s.id = i.server_id
       WHERE i.code = ${code}
         AND (i.expires_at IS NULL OR i.expires_at > now())
@@ -222,6 +227,7 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
       serverId: row.serverId,
       serverName: row.serverName,
       memberCount: row.memberCount,
+      courseCount: row.courseCount,
       expiresAt: row.expiresAt ? new Date(row.expiresAt).toISOString() : null,
       maxUses: row.maxUses ?? null,
       uses: row.uses,

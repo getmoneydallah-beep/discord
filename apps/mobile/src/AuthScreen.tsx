@@ -68,7 +68,7 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
             <>
               <Field label={t("auth.displayName")} value={displayName} onChangeText={setDisplayName} maxLength={64} />
               <Field
-                label={t("auth.username")}
+                label={t("auth.usernameOptional")}
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"

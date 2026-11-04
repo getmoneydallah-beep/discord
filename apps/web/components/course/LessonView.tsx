@@ -70,6 +70,22 @@ export function LessonView({ serverId, courseId, lessonId }: { serverId: string;
         <Link href={`/s/${serverId}/${courseId}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-fg">
           <span className="flip-rtl inline-block">←</span> {course?.name ?? t("course.back")}
         </Link>
+        {summary && (
+          <h1 className="mx-auto mb-4 max-w-lg text-center text-xl font-bold">
+            🔒 <bdi>{summary.title}</bdi>
+          </h1>
+        )}
+        {(() => {
+          const preview = course?.sections.flatMap((s) => s.lessons).find((l) => !l.locked);
+          return preview ? (
+            <Link
+              href={`/s/${serverId}/${courseId}/${preview.id}`}
+              className="mx-auto mb-4 flex max-w-lg items-center justify-center gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm font-medium text-brand"
+            >
+              👁 {t("home.preview")}: <bdi>{preview.title}</bdi>
+            </Link>
+          ) : null;
+        })()}
         <LockedPanel serverId={serverId} channelId={courseId} />
       </div>
     );

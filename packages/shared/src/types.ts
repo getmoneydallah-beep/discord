@@ -156,6 +156,7 @@ export interface Invite {
   serverId: string;
   serverName: string;
   memberCount: number;
+  courseCount?: number;
   expiresAt: string | null;
   maxUses: number | null;
   uses: number;

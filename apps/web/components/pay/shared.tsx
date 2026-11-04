@@ -18,7 +18,7 @@ export function useMoney() {
 export function useOfferPrice() {
   const t = useT();
   const money = useMoney();
-  return (o: Pick<Offer, "priceMinor" | "currency" | "billing">) =>
+  return (o: { priceMinor: number; currency: string; billing: Offer["billing"] }) =>
     `${money(o.priceMinor, o.currency)}${o.billing === "monthly" ? ` ${t("pay.perMonth")}` : o.billing === "yearly" ? ` ${t("pay.perYear")}` : ""}`;
 }
 
@@ -37,7 +37,7 @@ export function useOffers(serverId: string) {
 }
 
 /** Sends the member to Whop checkout for an offer. Selling happens on the web only. */
-export function UnlockButton({ offer, className }: { offer: Offer; className?: string }) {
+export function UnlockButton({ offer, className = "w-full sm:w-auto" }: { offer: Offer; className?: string }) {
   const t = useT();
   const price = useOfferPrice();
   const [busy, setBusy] = useState(false);
@@ -89,7 +89,7 @@ export function OfferCard({ offer }: { offer: Offer }) {
   const t = useT();
   const price = useOfferPrice();
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-bg p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-bg p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <div className="font-bold" dir="auto">
           {offer.name}

@@ -380,3 +380,32 @@ describe("teacher dashboard summary", () => {
     expect((await api("GET", `/servers/${serverId}/summary`, student.token)).status).toBe(403);
   });
 });
+
+describe("student onboarding", () => {
+  it("shows an invite to logged-out visitors (name and counts only)", async () => {
+    const inv = await api<Invite>("POST", `/servers/${serverId}/invites`, owner.token, {});
+    const r = await api<Invite>("GET", `/invites/${inv.body.code}`);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ serverName: "أكاديمية", memberCount: 2 });
+    expect(r.body.courseCount).toBeGreaterThan(0);
+    expect((await api("POST", `/invites/${inv.body.code}`)).status).toBe(401); // joining still needs an account
+    expect((await api("GET", `/servers/${serverId}`)).status).toBe(401);
+  });
+
+  it("signs up without a username and generates one from the email", async () => {
+    const r = await api<AuthResponse>("POST", "/auth/register", undefined, {
+      email: `Khalid.M+${Math.random().toString(36).slice(2, 6)}@Example.com`,
+      username: "",
+      displayName: "خالد",
+      password: "password123",
+    });
+    expect(r.status).toBe(201);
+    expect(r.body.user.username).toMatch(/^khalid\.m[a-z0-9]*_\d{4}$/);
+  });
+
+  it("lists my subscriptions across majlises", async () => {
+    const r = await api<unknown[]>("GET", "/me/entitlements", student.token);
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body)).toBe(true);
+  });
+});

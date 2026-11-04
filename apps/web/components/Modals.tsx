@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { parseInviteCode } from "@majlis/api-client";
-import { actions, api, errorMessage, useApp, useT } from "@/lib/store";
+import { actions, api, errorMessage, useT } from "@/lib/store";
 import { useUi } from "@/lib/ui";
 import { Button, Input, Modal } from "./ui";
 import { ChannelSettingsModal, CreateChannelModal } from "./ChannelModals";
@@ -22,7 +21,6 @@ export function Modals() {
       {modal === "createChannel" && <CreateChannelModal onClose={close} />}
       {modal === "createCourse" && <CreateChannelModal onClose={close} initial="course" />}
       {modal === "channelSettings" && modalArg && <ChannelSettingsModal channelId={modalArg} onClose={close} />}
-      {modal === "settings" && <Settings onClose={close} />}
     </>
   );
 }
@@ -124,127 +122,6 @@ function InviteModal({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
       {copied && <p className="text-sm text-success">{t("server.inviteCopied")}</p>}
-    </Modal>
-  );
-}
-
-function Settings({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  const router = useRouter();
-  const prefs = useApp((s) => s.prefs);
-  const { serverId } = useParams<{ serverId?: string }>();
-  const myRole = useApp((s) => (serverId ? s.serverState[serverId]?.myRole : undefined));
-
-  async function guard(fn: () => Promise<unknown>) {
-    try {
-      await fn();
-    } catch (err) {
-      alert(errorMessage(err));
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title={t("common.settings")}>
-      <div className="space-y-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">👤 {t("settingsGroups.account")}</h3>
-        <label className="flex items-center justify-between">
-          <span>{t("common.language")}</span>
-          <select
-            value={prefs.locale}
-            onChange={(e) => void actions.setPrefs({ locale: e.target.value as "ar" | "en" })}
-            className="rounded-md border border-line bg-bg px-2 py-1"
-          >
-            <option value="ar">العربية</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-        <label className="flex items-center justify-between">
-          <span>١٢٣ / 123</span>
-          <input
-            type="checkbox"
-            checked={prefs.easternDigits}
-            onChange={(e) => void actions.setPrefs({ easternDigits: e.target.checked })}
-            className="h-5 w-5 accent-brand"
-          />
-        </label>
-
-        <h3 className="border-t border-line pt-4 text-xs font-semibold uppercase tracking-wide text-muted">🎓 {t("settingsGroups.teaching")}</h3>
-        <nav className="-mt-2 flex flex-col gap-1 text-sm">
-          {[
-            ["/s/billing", "⭐", t("pay.billing")],
-            ["/s/whop", "🔗", t("pay.whop")],
-            ["/s/sales", "🧾", t("pay.sales")],
-          ].map(([href, icon, label]) => (
-            <Link key={href} href={href!} onClick={onClose} className="rounded-md px-2 py-2 hover:bg-surface-hover">
-              {icon} {label}
-            </Link>
-          ))}
-        </nav>
-
-        {serverId && myRole && (
-          <div className="border-t border-line pt-4">
-            {myRole === "owner" ? (
-              <Button
-                variant="danger"
-                className="w-full"
-                onClick={() =>
-                  confirm(`${t("server.delete")}?`) &&
-                  guard(async () => {
-                    await actions.deleteServer(serverId);
-                    onClose();
-                    router.push("/s");
-                  })
-                }
-              >
-                {t("server.delete")}
-              </Button>
-            ) : (
-              <Button
-                variant="danger"
-                className="w-full"
-                onClick={() =>
-                  guard(async () => {
-                    await actions.leaveServer(serverId);
-                    onClose();
-                    router.push("/s");
-                  })
-                }
-              >
-                {t("server.leave")}
-              </Button>
-            )}
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2 border-t border-line pt-4">
-          <Button
-            variant="ghost"
-            onClick={() =>
-              guard(async () => {
-                onClose();
-                await actions.signOut();
-                router.push("/login");
-              })
-            }
-          >
-            {t("auth.logout")}
-          </Button>
-          <Button
-            variant="ghost"
-            className="text-danger"
-            onClick={() =>
-              confirm(t("auth.deleteAccountConfirm")) &&
-              guard(async () => {
-                onClose();
-                await actions.deleteAccount();
-                router.push("/register");
-              })
-            }
-          >
-            {t("auth.deleteAccount")}
-          </Button>
-        </div>
-      </div>
     </Modal>
   );
 }

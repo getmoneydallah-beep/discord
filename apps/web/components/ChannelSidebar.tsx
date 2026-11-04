@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { can, type Channel } from "@majlis/shared";
-import { useApp, useT } from "@/lib/store";
+import { actions, errorMessage, useApp, useT } from "@/lib/store";
 import { useUi } from "@/lib/ui";
 import { Avatar, cx } from "./ui";
 
@@ -24,8 +25,9 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
   const courses = st.channels.filter((c) => c.type === "course");
   const canManage = can(st.myRole, "channel.manage");
   const onManage = pathname.endsWith("/manage");
-  // On phones the sidebar is a drawer whenever a page (channel or dashboard) is open.
-  const pageOpen = Boolean(channelId) || onManage;
+  const onHome = pathname === `/s/${serverId}`;
+  // On phones the sidebar is a drawer whenever a page (home, channel or dashboard) is open.
+  const pageOpen = Boolean(channelId) || onManage || onHome;
 
   return (
     <aside className={cx("w-60 shrink-0 flex-col bg-sidebar", pageOpen && !navOpen ? "hidden md:flex" : "flex flex-1 md:flex-none")}>
@@ -40,9 +42,20 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
         >
           + {t("server.invite")}
         </button>
+        <ServerMenu serverId={serverId} />
       </header>
 
       <div className="scroll-thin flex-1 overflow-y-auto px-2 py-3">
+        <Link
+          href={`/s/${serverId}`}
+          onClick={() => setNav(false)}
+          className={cx(
+            "mb-1 flex items-center gap-2 rounded-md px-2 py-1.5",
+            onHome ? "bg-surface-hover font-semibold text-fg" : "text-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <span className="w-5 text-center">🏠</span> <span>{t("home.title")}</span>
+        </Link>
         {canManage && (
           <Link
             href={`/s/${serverId}/manage`}
@@ -86,12 +99,60 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
               @{me.username}
             </div>
           </div>
-          <button onClick={() => openModal("settings")} className="text-muted hover:text-fg" title={t("common.settings")}>
+          <Link href="/s/settings" className="text-muted hover:text-fg" title={t("common.settings")}>
             ⚙
-          </button>
+          </Link>
         </footer>
       )}
     </aside>
+  );
+}
+
+/** ⋯ menu next to the server name: leave (members and admins) or delete (owner). */
+function ServerMenu({ serverId }: { serverId: string }) {
+  const t = useT();
+  const router = useRouter();
+  const server = useApp((s) => s.servers.find((x) => x.id === serverId));
+  const myRole = useApp((s) => s.serverState[serverId]?.myRole);
+  const [open, setOpen] = useState(false);
+  if (!server || !myRole) return null;
+  const isOwner = myRole === "owner";
+
+  async function act() {
+    setOpen(false);
+    const msg = isOwner ? `${t("server.delete")}: ${server!.name}?` : t("serverMenu.leaveConfirm", { name: server!.name });
+    if (!confirm(msg)) return;
+    try {
+      if (isOwner) await actions.deleteServer(serverId);
+      else await actions.leaveServer(serverId);
+      router.push("/s");
+    } catch (err) {
+      alert(errorMessage(err));
+    }
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label={t("serverMenu.menu")}
+        title={t("serverMenu.menu")}
+        aria-expanded={open}
+        className="rounded-md px-1.5 py-1 text-muted hover:bg-surface hover:text-fg"
+      >
+        ⋯
+      </button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-10 cursor-default" aria-hidden onClick={() => setOpen(false)} tabIndex={-1} />
+          <div className="absolute end-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-line bg-sidebar py-1 shadow-xl">
+            <button onClick={act} className="block w-full px-3 py-2 text-start text-sm text-danger hover:bg-danger/10">
+              {isOwner ? `🗑️ ${t("server.delete")}` : `🚪 ${t("serverMenu.leave")}`}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

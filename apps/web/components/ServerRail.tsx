@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useApp, useT } from "@/lib/store";
 import { useUi } from "@/lib/ui";
 import { cx } from "./ui";
@@ -10,6 +10,8 @@ import { cx } from "./ui";
 export function ServerRail() {
   const servers = useApp((s) => s.servers);
   const { serverId } = useParams<{ serverId?: string }>();
+  // Full-width pages (settings, billing, Whop, sales) get the whole phone screen.
+  const fullPage = /^\/s\/(settings|billing|whop|sales)$/.test(usePathname());
   const navOpen = useUi((s) => s.navOpen);
   const openModal = useUi((s) => s.openModal);
   const t = useT();
@@ -18,7 +20,7 @@ export function ServerRail() {
     <nav
       className={cx(
         "scroll-thin w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-rail py-3",
-        serverId && !navOpen ? "hidden md:flex" : "flex",
+        (serverId || fullPage) && !navOpen ? "hidden md:flex" : "flex",
       )}
     >
       {servers.map((s) => {
@@ -53,13 +55,13 @@ export function ServerRail() {
         ⤵
       </button>
       <div className="flex-1" />
-      <button
-        onClick={() => openModal("settings")}
+      <Link
+        href="/s/settings"
         title={t("common.settings")}
         className="flex h-12 w-12 items-center justify-center rounded-3xl bg-surface text-xl text-muted hover:text-fg"
       >
         ⚙
-      </button>
+      </Link>
     </nav>
   );
 }

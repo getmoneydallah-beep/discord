@@ -25,6 +25,12 @@ The web and mobile apps share the same API client and the same state store (`@ma
 - **Arabic-aware search**: alef forms (أ إ آ ا), ة/ه, ى/ي, diacritics (tashkeel) and the stretch character (tatweel) are normalised before indexing, so "اصدقاء" finds "أصدقاء".
 - Roles (owner, admin, member), kick, ban, and making or removing admins.
 - **Announcement channels** (📢): only the owner and admins post; members read and react. Every channel has a settings dialog (name, topic, who can post, free or paid).
+- **Student experience:**
+  - Invite links work logged out: they show the majlis (name, members, courses), then sign-up returns the student and joins automatically.
+  - The username is optional at sign-up.
+  - Each majlis has a **home** (🏠): latest announcement, courses with progress and a Start/Continue button, chats, and offers.
+  - **Settings** is a page: profile (display name), language and digits, **my subscriptions**, teaching tools (teachers only), and the account.
+  - «Leave majlis» is in the ⋯ menu next to the server name.
 - **Teacher dashboard** (sidebar → «لوحة المعلم»): a setup checklist (course → lessons → invite → plan → connect Whop → first offer), channel permissions, and selling (offers in three steps with a live preview, subscribers, manual grants). New servers open here.
 - Reporting messages, and deleting your own account. Both app stores require these.
 - RTL by default with an English toggle. Each message chooses its own text direction. Optional Eastern Arabic digits (١٢٣). Dates use the Gregorian calendar, with Hijri formatting available.

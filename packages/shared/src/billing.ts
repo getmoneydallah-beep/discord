@@ -174,3 +174,19 @@ export interface ServerSummary {
   offers: number;
   paidChannels: number;
 }
+
+/** One of the viewer's own subscriptions, for Settings → My subscriptions. */
+export interface MyEntitlement {
+  id: string;
+  offerId: string;
+  offerName: string;
+  serverId: string;
+  serverName: string;
+  source: "whop" | "manual";
+  status: EntitlementStatus;
+  billing: OfferBilling;
+  priceMinor: number;
+  currency: string;
+  startsAt: string;
+  endsAt: string | null;
+}

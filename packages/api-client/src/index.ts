@@ -6,6 +6,7 @@ import type {
   Offer,
   OfferInput,
   PaidTier,
+  MyEntitlement,
   Sale,
   ServerSummary,
   WhopConnectionInfo,
@@ -165,6 +166,7 @@ export class ApiClient {
   connectWhop = (apiKey: string) => this.request<WhopConnectionInfo>("PUT", "/whop/connection", { apiKey });
   disconnectWhop = () => this.request<void>("DELETE", "/whop/connection");
   listSales = () => this.request<Sale[]>("GET", "/sales");
+  myEntitlements = () => this.request<MyEntitlement[]>("GET", "/me/entitlements");
 
   // Uploads
   createUpload = (serverId: string, input: { filename: string; contentType: string; size: number; purpose: UploadPurpose }) =>

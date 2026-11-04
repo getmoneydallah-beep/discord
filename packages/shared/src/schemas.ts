@@ -20,7 +20,8 @@ export const usernameSchema = z
 
 export const registerSchema = z.object({
   email: z.email().trim().toLowerCase(),
-  username: usernameSchema,
+  /** Optional: generated from the email when left empty. */
+  username: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), usernameSchema.optional()),
   displayName: z.string().trim().min(1).max(64),
   password: z.string().min(8).max(128),
   locale: z.enum(LOCALES).default("ar"),
