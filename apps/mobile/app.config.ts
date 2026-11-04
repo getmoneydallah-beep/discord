@@ -8,6 +8,7 @@ const config: ExpoConfig = {
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
+  icon: "./assets/icon.png",
   ios: {
     bundleIdentifier: "app.majlis",
     supportsTablet: true,
@@ -21,6 +22,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: "app.majlis",
+    adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#03825D" },
     intentFilters: [
       {
         action: "VIEW",

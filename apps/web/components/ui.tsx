@@ -96,7 +96,9 @@ export function Splash({ label }: { label: string }) {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="text-center">
-        <div className="mb-3 text-4xl font-bold text-brand">مجلس</div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/mark-192.png" alt="" width={72} height={72} className="mx-auto mb-3 h-[72px] w-[72px] rounded-[20px] shadow-lg shadow-brand/30" />
+        <div className="mb-1 text-2xl font-bold text-brand">مجلس</div>
         <div className="text-sm text-muted">{label}</div>
       </div>
     </div>

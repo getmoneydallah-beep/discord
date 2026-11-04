@@ -38,9 +38,8 @@ export function LandingHeader({ lang }: { lang: LandingLang }) {
         )}
       >
         <Link href={lang === "ar" ? "/" : "/?lang=en"} className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-[#0b4f38] text-sm font-bold text-white shadow-md shadow-brand/30">
-            م
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/mark-192.png" alt="" width={34} height={34} className="h-[34px] w-[34px] rounded-[10px] shadow-md shadow-brand/30" />
           <span className="text-lg font-bold">{brand}</span>
         </Link>
 

@@ -63,7 +63,11 @@ function InviteCard() {
     <main className="flex min-h-full items-center justify-center bg-rail p-4">
       <div className="w-full max-w-sm space-y-5 rounded-2xl border border-line bg-sidebar p-8 text-center shadow-xl">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-brand">{t("appName")}</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-brand">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/mark-192.png" alt="" width={22} height={22} className="h-[22px] w-[22px] rounded-md" />
+            {t("appName")}
+          </span>
           <LanguageToggle />
         </div>
         {error && <p className="text-danger">{error}</p>}

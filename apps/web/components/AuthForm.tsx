@@ -59,7 +59,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       <div className="w-full max-w-sm space-y-6 rounded-2xl border border-line bg-sidebar p-8 shadow-xl">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-brand">{t("appName")}</h1>
+            <h1 className="flex items-center gap-2 text-3xl font-bold text-brand">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/mark-192.png" alt="" width={40} height={40} className="h-10 w-10 rounded-xl" />
+              {t("appName")}
+            </h1>
             <p className="mt-1 text-sm text-muted">{t("tagline")}</p>
           </div>
           <LanguageToggle />

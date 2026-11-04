@@ -170,7 +170,11 @@ export default async function Landing({ searchParams }: Props) {
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-8 text-sm text-muted">
-          <span className="text-lg font-bold text-brand">{lang === "ar" ? "مجلس" : "Majlis"}</span>
+          <span className="flex items-center gap-2 text-lg font-bold text-brand">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/mark-192.png" alt="" width={28} height={28} className="h-7 w-7 rounded-lg" />
+            {lang === "ar" ? "مجلس" : "Majlis"}
+          </span>
           <span>{c.footer.tagline}</span>
           <div className="flex-1" />
           <Link href="/login" className="hover:text-fg">{c.footer.login}</Link>
