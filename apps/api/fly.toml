@@ -1,5 +1,6 @@
 # Fly.io config for the Majlis API + WebSocket gateway.
 # Deploy from the repo root:  fly deploy --config apps/api/fly.toml --ha=false
+# (single machine until Redis is added for multi-instance real-time fan-out)
 app = "majlis-sa-api"
 
 # Fly has no region inside Saudi Arabia. Frankfurt is the closest well-connected
@@ -19,14 +20,9 @@ primary_region = "fra"
   PUBLIC_API_URL = "https://majlis-sa-api.fly.dev"
   WEB_URL = "https://majlis-web.fly.dev"
   CORS_ORIGINS = "https://majlis-web.fly.dev"
-  # Until Cloudflare R2 is configured, uploads live on the persistent volume below.
-  # When adding R2_* secrets, remove these two lines and the [mounts] section.
-  ALLOW_LOCAL_STORAGE = "true"
-  STORAGE_DIR = "/data/uploads"
-
-[mounts]
-  source = "majlis_data"
-  destination = "/data"
+  # Files and course videos are stored in Cloudflare R2 (bucket "majlis-media",
+  # location EEUR). Credentials are Fly secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+  # R2_SECRET_ACCESS_KEY, R2_BUCKET.
 
 [http_service]
   internal_port = 8080

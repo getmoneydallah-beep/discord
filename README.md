@@ -90,7 +90,7 @@ The API tests start the real server and drive the REST API and the WebSocket gat
 | Web | Vercel | Root directory `apps/web`, env `NEXT_PUBLIC_API_URL=https://api.majlis.app` |
 | iOS / Android | Expo EAS | `cd apps/mobile && eas build --profile production` then `eas submit` |
 
-**Live now:** web <https://majlis-web.fly.dev>, API <https://majlis-sa-api.fly.dev> (Fly.io `fra`). Until R2 is configured, the API stores uploads on a 3 GB Fly volume (`majlis_data`), so it runs as a single machine (`--ha=false`).
+**Live now:** web <https://majlis-web.fly.dev>, API <https://majlis-sa-api.fly.dev> (Fly.io `fra`). Files and course videos are stored in Cloudflare R2 (private bucket `majlis-media`, location EEUR, CORS from `infra/r2-cors.json`). The API runs as a single machine (`--ha=false`) until Redis is added for multi-instance real-time fan-out.
 
 Redeploy after changes (from the repo root):
 
