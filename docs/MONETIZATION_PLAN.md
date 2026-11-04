@@ -6,34 +6,39 @@
 
 ## 1. How money flows
 
+**Model:** Majlis's own Whop account is the **only seller**. Every payment — teacher subscriptions *and* student purchases — goes into Majlis's Whop balance. Majlis keeps an **earnings ledger** for every teacher and **pays teachers out through Whop connected accounts** (the owner has done this before). No Whop Platforms API, no invite needed.
+
 ```
-                    ┌──────────────── Majlis (platform Whop account) ────────────────┐
- Teacher ──$29–199/mo──▶  Teacher subscription (our own Whop product)               │
-                    │                                                               │
- Student ──pays 99 SAR──▶ Checkout on the TEACHER's connected account ─┐            │
-                    │            (direct charge)                      │            │
-                    │   application fee (2–5%) ──────────────────────▶ platform    │
-                    │   remainder ──▶ teacher's Whop balance ──▶ payout to bank     │
-                    └───────────────────────────────────────────────────────────────┘
- Majlis API ◀── webhooks (payment / membership valid / invalid / refund) ── Whop
-      └─▶ grants or removes access (entitlements) inside the server
+ Teacher ──$29–199/mo──────────────▶ ┌──────────────────────────────┐
+                                      │  Majlis Whop account         │
+ Student ──pays 99 SAR (offer by ────▶│  (merchant of record)        │
+           teacher X)                 └──────┬───────────────────────┘
+                                             │ webhook: payment succeeded / refunded / disputed
+                                             ▼
+                                   Majlis API → access granted + ledger entry:
+                                     +99.00 sale  −Whop fees  −Majlis fee (5%) = teacher X earns
+                                             │ after a 14-day hold (refund window)
+                                             ▼
+                              "Payouts" admin page: teacher X has 412 SAR available
+                                             │ owner sends it in Whop to X's connected account
+                                             ▼                (later: automated via Transfers API)
+                                   mark payout paid → teacher sees it under "Earnings → Paid"
 ```
 
-**Two separate Whop integrations:**
+| | Teacher subscription | Student buys a teacher's offer |
+|---|---|---|
+| Seller on Whop | Majlis | **Majlis** |
+| Whop objects | One product "Majlis for Teachers" + plans | One Whop product + plan **per teacher offer**, on Majlis's account (created by our API; `metadata` holds `server_id` / `offer_id` / `teacher_id`) |
+| Refunds & disputes | Majlis | **Majlis** (deducted from the teacher's ledger) |
+| Money to teacher | — | Payout from Majlis's balance to the teacher's **Whop connected account** |
 
-| | What | Whop feature | Who is the merchant |
-|---|---|---|---|
-| A | **Teacher pays Majlis** (SaaS subscription) | A normal Whop product on *our* account with monthly or yearly plans | Majlis |
-| B | **Student pays teacher** (server access) | Whop **Platforms**: each teacher is a connected account (`biz_…`). We create checkout configurations on their account with an `application_fee_amount`. | The teacher, who handles refunds, disputes and Whop's fees |
-
-We choose **direct charges** over collecting everything and transferring it on. The teacher is then the seller of record for refunds, disputes and tax, and Majlis isn't holding other people's money.
-
-### ⚠️ Blockers to clear first
-1. **Whop's Platforms API (connected accounts, KYC, payouts) is invite-only.** We must email sales@whop.com and get approved before part B can go live. Part A, the teacher subscription, doesn't need approval.
-2. **The Whop sandbox can't do payouts**, and it takes cards only (no Apple Pay or Google Pay). We can build and test checkout, webhooks and access fully in the sandbox; payouts get tested in production with a small real amount.
-3. **Payment methods in Saudi Arabia.** Saudi buyers rely heavily on **mada, Apple Pay and STC Pay**. We need to confirm which ones Whop's production checkout supports for KSA cards. If mada is missing, plan a second option: **Tap Payments** or **Moyasar**, both Saudi gateways that support split payments. Write the payments code behind one interface (`PaymentProvider`) so a second provider can be added without a rewrite.
-4. **Whop's payouts to Saudi bank accounts.** Whop says it pays out to "200+ countries". We should confirm KSA bank payouts with Whop when we request Platforms access.
-5. **Tax.** Saudi VAT is 15%, and ZATCA requires e-invoices. With direct charges each teacher is responsible for their own VAT. Majlis owes VAT on its own subscription revenue once it's registered. Get an accountant's confirmation.
+### What this means
+- ✅ **Everything works in the Whop sandbox today**: checkout, trials, coupons, webhooks, access. Only the payout step itself is done in production (sandbox has no payouts) — and it's a step the owner already knows.
+- ✅ **Teachers don't need KYC with us to start selling** — they only need a Whop account to *receive* payouts. They can sell from day one and connect payouts later; earnings accumulate.
+- ⚠️ **Majlis carries refund and chargeback risk.** Mitigation: a **hold period** (default 14 days, longer for new teachers) before earnings become payable; refunds/chargebacks after payout create a negative balance recovered from future earnings; content-abuse rules in the teacher terms.
+- ⚠️ **Tax:** Majlis collects the full sale, so it is the seller of record for VAT purposes (Saudi VAT 15%, ZATCA e-invoicing) — or a "marketplace agent" if structured that way. **Accountant must confirm the structure** before going live; it also decides what goes on student receipts.
+- ⚠️ **Saudi payment methods:** confirm Whop checkout supports **mada / Apple Pay / STC Pay** for Saudi buyers. If not, Tap Payments or Moyasar can be added later as a second checkout behind the same `PaymentProvider` interface — the ledger and payouts stay the same.
+- ⚠️ **Sandbox limits:** cards only (no Apple/Google Pay), no payouts.
 
 ---
 
@@ -76,7 +81,7 @@ Teachers create **offers** («العروض»). An offer is something a student c
 ### Data model (new tables)
 ```
 teacher_subscriptions (user_id, whop_membership_id, tier, status, trial_ends_at, current_period_end)
-seller_accounts       (server_id, whop_company_id 'biz_…', kyc_status, payouts_enabled)
+payout_accounts       (teacher_user_id, whop_username / whop_company_id, connected_at, status)  -- where we send money
 offers                (id, server_id, name, description, price_minor, currency, billing: one_time|monthly|yearly,
                        trial_days, seat_limit, whop_product_id, whop_plan_id, whop_checkout_config_id, active, position)
 offer_grants          (offer_id, target_type: server|channel|course, target_id)
@@ -106,27 +111,29 @@ webhook_events        (id, provider, event_id UNIQUE, type, received_at, process
 
 ## 4. Whop integration details
 
-**Part A: teacher subscription.** Available now in the sandbox.
-- One Whop product, "Majlis for Teachers", with plans for Starter, Pro and Academy (monthly and yearly). It's created once, by a script.
-- "Upgrade" calls the API, which creates a checkout configuration with `metadata.user_id` and redirects to Whop's checkout. The `redirect_url` returns to `/billing?ok=1`.
-- Webhooks (membership valid or invalid, payment succeeded or failed) update `teacher_subscriptions`, and the app enables or limits plan features.
-- The billing page shows the plan, renewal date, invoices, and change or cancel. This can link to Whop's own management page at first.
+All on **Majlis's single Whop account** with a normal company API key — no Platforms API.
 
-**Part B: teachers selling.** Needs the Platforms invite.
-1. **"Start selling" onboarding:** create the teacher's connected account (`companies.create` with `parent_company_id` = Majlis). Then send them to Whop's hosted KYC and payout setup link (`account_links`, with `return_url` set to our dashboard). Store `kyc_status` and show a checklist.
-2. **Publishing an offer:** create a product and plan on the teacher's account, plus a checkout configuration. Set `account_id` to the teacher's `biz_`, `variant.initial_price` to the price, the billing type, and `application_fee_amount` according to the teacher's tier.
-3. **Buying:**
-   - The student taps "Unlock", and the API creates or reuses a checkout session with `metadata.majlis_user_id` and `offer_id`, then redirects to Whop's checkout.
-   - On return, a "Processing…" screen polls until the webhook confirms payment.
-   - The webhook creates the entitlement; the server opens up, with a celebration screen and a push notification.
-4. **Payouts:** a "Payouts" tab embeds or links Whop's payout portal (`account_links` with use case `payouts_portal`). Teachers withdraw to a bank, a mobile wallet or crypto.
-5. **Refunds and disputes:** handled in Whop by the teacher. A webhook revokes access automatically.
-6. **Webhook security:** verify Whop's signature, store each event ID so it's processed once (`webhook_events`), and process in a retry-safe queue. A nightly job compares entitlements against Whop memberships.
+**A. Teacher subscription**
+- One Whop product "Majlis for Teachers" with Starter/Pro/Academy plans (monthly + yearly, 14-day trial) — created once by a setup script.
+- Upgrade → API creates a checkout configuration (`metadata.kind = "teacher_subscription"`, `metadata.user_id`) → redirect to Whop checkout → `redirect_url` back to `/billing`.
+- Webhooks (membership valid/invalid, payment succeeded/failed) update `teacher_subscriptions` → tier limits apply instantly.
 
-**Environments:**
-- `WHOP_ENV=sandbox|production`: sandbox is `https://sandbox-api.whop.com/api/v1`; production is `https://api.whop.com/api/v1`.
-- Secrets stored on Fly: `WHOP_API_KEY`, `WHOP_WEBHOOK_SECRET`, `WHOP_COMPANY_ID`.
-- Sandbox test cards: `4242 4242 4242 4242` succeeds, `4000 0000 0000 0002` is declined, and `5385 3083 6013 5181` triggers the 3-D Secure check.
+**B. Students buying a teacher's offer**
+1. **Publishing an offer** creates a Whop product + plan on Majlis's account (name shows teacher + offer, e.g. «أكاديمية التصميم — الاشتراك الشهري»), billing one-time / monthly / yearly, optional trial. Editing price creates a new plan (existing subscribers keep theirs).
+2. **Buying:** "Unlock" → API creates a checkout configuration with `metadata = { kind: "offer", offer_id, server_id, teacher_id, majlis_user_id, ref }` → Whop checkout → back to a "Processing…" screen that waits for the webhook.
+3. **Webhook `payment succeeded`** → entitlement granted (or extended for renewals) **and** ledger entries written: `sale` +gross, `whop_fee` −actual fee from the payment object, `platform_fee` −(tier %), each with `available_at = now + hold`.
+4. **Membership invalid** (cancelled/expired/failed renewal) → entitlement ends at period end. **Refund / dispute** → access revoked + negative ledger entries.
+5. **Coupons** map to Whop promo codes scoped to that offer's plan (teacher creates them in Majlis; API creates them in Whop).
+
+**C. Teacher payouts (via Whop connected accounts)**
+- **Teacher → "Earnings" page:** pending (in hold), available, paid; per-sale history; "Connect your Whop account to receive payouts" (store their Whop username / account id — the owner links it as a connected account in the Whop dashboard).
+- **Owner → "Payouts" admin page:** list of teachers with available balance ≥ minimum (e.g. 100 SAR), their connected Whop account, CSV export → owner sends payouts in Whop (as today) → clicks "Mark paid" with the Whop reference → `payout` ledger entry, teacher notified.
+- **Schedule:** e.g. every Sunday / twice a month. **Later (optional):** automate with Whop's Transfers API (`transfers.create`, origin = Majlis, destination = teacher's account) if available on the account — the ledger already supports it.
+- **Safety:** payouts never exceed the available (post-hold) balance; negative balances block payouts; every number is derived from the append-only ledger, so it always reconciles with Whop.
+
+**Webhooks & reliability:** verify Whop signature, idempotency via `webhook_events`, retry-safe processing, nightly reconciliation of memberships and payments against Whop.
+
+**Environments:** `WHOP_ENV=sandbox|production` (sandbox API `https://sandbox-api.whop.com/api/v1`, production `https://api.whop.com/api/v1`); secrets on Fly: `WHOP_API_KEY`, `WHOP_WEBHOOK_SECRET`, `WHOP_COMPANY_ID`. Sandbox test cards: `4242 4242 4242 4242` (success), `4000 0000 0000 0002` (declined), `5385 3083 6013 5181` (3DS).
 
 ---
 
@@ -205,33 +212,20 @@ Teachers edit it in a simple form, with no page builder.
 | **1** | Platform landing page; server-rendered public sales page `/m/<slug>` with link previews; slugs | Logo or brand direction; landing copy approval | 1 week |
 | **2** | Free/paid/preview access rules: offers, grants and entitlements, **manual grants**, locked screens on web and mobile, `canAccess` enforced everywhere, including real-time push and signed R2 links | nothing | 1–1.5 weeks |
 | **3** | **Teacher subscription via Whop (sandbox → production):** plans and tier limits, checkout, webhooks, billing page, trials | Whop **sandbox** API key and webhook secret in the environment settings; final prices | 1–1.5 weeks |
-| **4** | **Teachers selling via Whop Platforms:** seller onboarding (KYC link), publishing offers as Whop checkouts with platform fee, purchase flow, webhooks → access, payout portal, refunds | **Platforms invite approved by Whop**; production keys | 1.5–2 weeks |
+| **4** | **Teachers selling:** offers → Whop products/plans on Majlis's account, purchase flow, webhooks → access, **earnings ledger** with hold period, refunds/disputes, teacher Earnings page, owner **Payouts** page (paid via Whop connected accounts) | Same sandbox key; production key at launch | 1.5–2 weeks |
 | **5** | Must-haves: coupons, trials, earnings dashboard, member list, announcements, onboarding checklist | — | 1.5 weeks |
 | **6** | Growth: affiliates, drip, certificates, quizzes, bundles, reviews, watermark | — | ongoing |
 | *(parallel)* | Saudi payment fallback (Tap or Moyasar) if Whop lacks mada or KSA payouts | Merchant account with Tap or Moyasar | 1–2 weeks |
 
-Phases 1 and 2 need nothing from Whop and can start immediately. Phase 2 also lets teachers grant paid access manually, so they can start onboarding paying students (paid by bank transfer, for example) before checkout exists.
+Phases 1 and 2 need nothing from Whop and can start immediately; phases 3–4 run fully in the Whop sandbox (only real payouts need production). Phase 2 also lets teachers grant paid access manually, so they can start onboarding paying students (paid by bank transfer, for example) before checkout exists.
 
 ---
 
 ## 9. What we need from the owner
 
-1. **Request Whop Platforms access.** Email sales@whop.com (draft below) and confirm Saudi payouts and mada support while you're at it.
-2. **Whop sandbox account:**
-   - Create one at sandbox.whop.com.
-   - Generate an API key (Dashboard → Developer) and set up a webhook secret.
-   - Add both as **environment secrets** in this cloud environment's settings (`WHOP_API_KEY`, `WHOP_WEBHOOK_SECRET`), **not in chat**.
-3. **Decide prices:** the teacher tiers and the platform fee percentage on sales (the proposal is 5% / 2% / 0%).
-4. **Logo and brand direction** for the landing page.
-5. **Business entity:** a Saudi commercial registration (CR) or a foreign entity. Whop's KYC and VAT registration depend on it.
-
-### Draft email to Whop (Platforms access)
-> **Subject:** Platforms API access request: Majlis (Arabic community & course platform)
->
-> Hi Whop team,
->
-> We're building **Majlis**, an Arabic-first community and course platform (web, iOS, Android) where teachers run communities with chat and video courses and sell access to their members. We'd like to use **Whop Platforms**: each teacher would be a connected account; we'd create checkouts on their account with an application fee, and teachers would withdraw through your payouts portal. Our platform subscription for teachers would also run on Whop.
->
-> Our main market is **Saudi Arabia** and the Gulf. Could you confirm (1) Platforms API eligibility for our use case, (2) payout support to Saudi bank accounts, and (3) whether **mada**, Apple Pay and STC Pay are supported at checkout for Saudi buyers?
->
-> We're currently integrating against the sandbox. Thanks!
+1. **Whop sandbox account** — create at sandbox.whop.com → Dashboard → Developer → API key + a webhook secret, and add them as **environment secrets** in this cloud environment's settings (`WHOP_API_KEY`, `WHOP_WEBHOOK_SECRET`) — **not in chat**.
+2. **Decide prices:** teacher tiers, Majlis fee % on sales (proposal 5 / 2 / 0 %), **hold period** (proposal 14 days) and **minimum payout** (proposal 100 SAR), payout schedule.
+3. **Ask Whop support** (normal support, no Platforms request): does checkout support **mada / Apple Pay / STC Pay** for Saudi buyers?
+4. **Accountant:** VAT structure when Majlis collects payments on behalf of teachers (seller of record vs. agent), ZATCA invoices.
+5. **Teacher terms:** refund policy, hold period, payout schedule, prohibited content — I'll draft them in Arabic + English.
+6. **Logo / brand direction** for the landing page.
