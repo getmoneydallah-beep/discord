@@ -248,7 +248,7 @@ Phases 1 and 2 need nothing from Whop and can start immediately; phases 3–4 ru
 - Whop only accepts `https://` return URLs.
 - A refund through `POST /payments/{id}/refund` sends `refund.created` with status `succeeded`.
 
-**Decisions made while building (easy to change):**
+**Decisions (confirmed by the owner, 2026-11-04):**
 - Refunds and chargebacks reduce the *available* balance immediately, even while the sale is still on hold. This is the safer option for Majlis.
 - A refund returns Majlis's fee on the refunded part, but not Whop's processing fee.
 - A lapsed teacher's renewals still pay the Starter fee (5%), and new checkouts for their offers are paused.
