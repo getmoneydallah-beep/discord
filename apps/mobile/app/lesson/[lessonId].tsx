@@ -1,3 +1,4 @@
+import { ApiError } from "@majlis/api-client";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -24,7 +25,9 @@ export default function LessonScreen() {
   useEffect(() => {
     setLesson(null);
     setJustFinished(false);
-    api.getLesson(lessonId).then(setLesson, (e: unknown) => setError(errorMessage(e)));
+    api.getLesson(lessonId).then(setLesson, (e: unknown) =>
+      setError(e instanceof ApiError && e.code === "locked" ? `🔒 ${t("pay.subscribersOnly")}` : errorMessage(e)),
+    );
     if (!course) void actions.loadCourse(courseId).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessonId, courseId]);

@@ -61,3 +61,14 @@ export function formatDate(iso: string, locale: Locale, opts: FormatOptions & { 
 }
 
 export { ar, en };
+
+/** 9900 + "sar" → "٩٩٫٠٠ ر.س." / "SAR 99.00" (minor units, two decimals). */
+export function formatMoney(amountMinor: number, currency: string, locale: Locale, opts: FormatOptions = {}): string {
+  const s = new Intl.NumberFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: amountMinor % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amountMinor / 100);
+  return opts.easternDigits ? toEasternDigits(s) : s;
+}

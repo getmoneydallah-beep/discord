@@ -222,6 +222,12 @@ describe("teacher subscription (phase 3)", () => {
     expect(b.body.subscription).toMatchObject({ tier: "pro", status: "trialing", interval: "monthly" });
     expect(b.body.subscription!.trialEndsAt).toBe(trialEnd);
     expect(b.body.limits.platformFeeBps).toBe(200);
+    // The $0 payment that starts a trial must not mark the plan as paid.
+    await webhook("payment.succeeded", { id: "pay_trial_0", status: "paid", currency: "usd", total: money("0.00", "usd"),
+      amount_after_fees: money("0.00", "usd"), membership_id: "mem_teacher", variant_id: plan.id, product_id: null,
+      checkout_configuration_id: null, metadata: { kind: "teacher_subscription", user_id: teacher.user.id, tier: "pro", interval: "monthly" } });
+    const after0 = await api<BillingInfo>("GET", "/billing", teacher.token);
+    expect(after0.body.subscription).toMatchObject({ status: "trialing", trialEndsAt: trialEnd });
     // Already subscribed: no second checkout.
     expect((await api("POST", "/billing/checkout", teacher.token, { tier: "academy" })).status).toBe(409);
   });

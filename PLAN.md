@@ -158,6 +158,7 @@ majlis/                     (pnpm + Turborepo monorepo)
 - [x] Phase 4 (part): roles, kick, ban, reports, account deletion, rate limits
 - [x] Attachments: signed uploads straight to Cloudflare R2, inline images and video, file cards, YouTube/Vimeo embeds
 - [x] Courses: unlimited per server; sections, lessons (R2 video or embed, notes, files), per-user progress, resume, auto-complete; editor on web; learner screens on web and mobile
+- [x] Monetization phases 3–4 (Whop sandbox): teacher plans and tier limits, offers, paid channels and courses with free previews, purchases, earnings ledger with hold, refunds and chargebacks, teacher Earnings page, owner Payouts page. See `docs/MONETIZATION_PLAN.md` §10.
 - [ ] Course editing on mobile
 - [ ] Resumable multipart uploads for very large videos, and adaptive streaming (HLS via Cloudflare Stream) for slow connections
 - [ ] Draft (unpublished) lessons, quizzes, and a certificate when a course is finished

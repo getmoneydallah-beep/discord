@@ -132,6 +132,7 @@ export default function CourseScreen() {
               return (
                 <Pressable
                   key={lesson.id}
+                  disabled={lesson.locked}
                   onPress={() => open(lesson.id)}
                   style={({ pressed }) => ({
                     flexDirection: "row",
@@ -162,7 +163,11 @@ export default function CourseScreen() {
                       {lesson.title}
                     </T>
                     <T muted size={12}>
-                      {[lesson.hasVideo ? `▶ ${t("course.video")}` : null, lesson.attachmentCount ? `📎 ${num(lesson.attachmentCount)}` : null]
+                      {[
+                        lesson.locked ? `🔒 ${t("pay.subscribersOnly")}` : null,
+                        lesson.hasVideo ? `▶ ${t("course.video")}` : null,
+                        lesson.attachmentCount ? `📎 ${num(lesson.attachmentCount)}` : null,
+                      ]
                         .filter(Boolean)
                         .join("  ")}
                     </T>

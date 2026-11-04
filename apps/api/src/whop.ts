@@ -169,7 +169,8 @@ export function createWhop(opts: { env: "sandbox" | "production"; apiKey: string
         account_id: opts.accountId,
         variant_id: input.planId,
         metadata: input.metadata,
-        redirect_url: input.redirectUrl,
+        // Whop only accepts https return URLs (local dev on http://localhost gets Whop's own success page).
+        redirect_url: input.redirectUrl.startsWith("https://") ? input.redirectUrl : null,
       }),
     getMembership: (id) => call<WhopMembership>("GET", `/memberships/${encodeURIComponent(id)}`),
   };

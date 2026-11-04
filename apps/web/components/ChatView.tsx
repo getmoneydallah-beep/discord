@@ -8,6 +8,7 @@ import { useUi } from "@/lib/ui";
 import { MessageItem } from "./MessageItem";
 import { Composer } from "./Composer";
 import { SearchBox } from "./SearchBox";
+import { AccessToggle, LockedPanel } from "./pay/shared";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -23,9 +24,10 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
   const stickToBottom = useRef(true);
   const prevHeight = useRef(0);
 
+  const locked = channel?.locked ?? false;
   useEffect(() => {
-    void actions.loadMessages(channelId);
-  }, [channelId]);
+    if (!locked) void actions.loadMessages(channelId).catch(() => undefined);
+  }, [channelId, locked]);
 
   // Keep pinned to the bottom for new messages; preserve position when loading older ones.
   useLayoutEffect(() => {
@@ -65,12 +67,19 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
         </h1>
         {channel.topic && <span className="hidden truncate text-sm text-muted md:inline">{channel.topic}</span>}
         <div className="flex-1" />
+        <AccessToggle channel={channel} />
         <SearchBox serverId={serverId} />
         <button onClick={toggleMembers} className="hidden p-1 text-muted hover:text-fg lg:block" title={t("server.members")}>
           👥
         </button>
       </header>
 
+      {locked ? (
+        <div className="scroll-thin flex-1 overflow-y-auto p-4 md:p-10">
+          <LockedPanel serverId={serverId} channelId={channelId} />
+        </div>
+      ) : (
+      <>
       <div ref={scroller} onScroll={onScroll} className="scroll-thin flex-1 overflow-y-auto pb-2">
         {data && !data.hasMore && (
           <div className="px-4 pb-4 pt-10">
@@ -118,6 +127,8 @@ export function ChatView({ serverId, channelId }: { serverId: string; channelId:
           setReplyTo(null);
         }}
       />
+      </>
+      )}
     </>
   );
 }

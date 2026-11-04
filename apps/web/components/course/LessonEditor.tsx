@@ -28,6 +28,7 @@ export function LessonEditor(props: {
   const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [files, setFiles] = useState<Attachment[]>([]);
+  const [freePreview, setFreePreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoInput = useRef<HTMLInputElement>(null);
@@ -45,6 +46,7 @@ export function LessonEditor(props: {
       setDuration(l.durationSeconds);
       setMode(l.video ? "upload" : l.videoUrl ? "link" : "none");
       setFiles(l.attachments);
+      setFreePreview(l.freePreview);
       setLoaded(true);
     }, (e) => setError(errorMessage(e)));
     return () => abort.current?.abort();
@@ -91,8 +93,8 @@ export function LessonEditor(props: {
       attachmentIds: [...files, ...fileUploads.ready].map((f) => f.id),
     };
     try {
-      if (lessonId) await api.updateLesson(lessonId, payload);
-      else await api.createLesson(course.id, payload);
+      const saved = lessonId ? await api.updateLesson(lessonId, payload) : await api.createLesson(course.id, payload);
+      if (saved.freePreview !== freePreview) await api.setLessonPreview(saved.id, freePreview);
       await actions.loadCourse(course.id);
       onClose();
     } catch (err) {
@@ -108,6 +110,13 @@ export function LessonEditor(props: {
       ) : (
         <form onSubmit={save} className="max-h-[75vh] space-y-5 overflow-y-auto pe-1">
           <Input label={t("course.lessonTitle")} value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} autoFocus dir="auto" />
+
+          {course.access === "paid" && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={freePreview} onChange={(e) => setFreePreview(e.target.checked)} />
+              👁 {t("pay.freePreview")}
+            </label>
+          )}
 
           {/* Video: three clear choices */}
           <div className="space-y-2">

@@ -9,6 +9,7 @@ import { useUi } from "@/lib/ui";
 import { Button, cx } from "../ui";
 import { CourseOutline, ProgressBar, useNum } from "./CourseOutline";
 import { CourseEditor } from "./CourseEditor";
+import { AccessToggle, LockedPanel } from "../pay/shared";
 
 /**
  * The course landing page. Learners see one obvious next step (Start /
@@ -20,6 +21,7 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
   const router = useRouter();
   const params = useSearchParams();
   const course = useApp((s) => s.courses[courseId]);
+  const channel = useApp((s) => s.serverState[serverId]?.channels.find((c) => c.id === courseId));
   const myRole = useApp((s) => s.serverState[serverId]?.myRole ?? "member");
   const setNav = useUi((s) => s.setNav);
   const canEdit = can(myRole, "channel.manage");
@@ -36,7 +38,13 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
   const { completed, total, nextLessonId, lastLessonId } = course.progress;
   const finished = total > 0 && completed === total;
   // One obvious next step: the first unfinished lesson, or the start when reviewing.
-  const target = finished ? course.sections.flatMap((s) => s.lessons)[0]?.id : nextLessonId;
+  const all = course.sections.flatMap((s) => s.lessons);
+  // Locked course: the button goes to the first free preview, if any.
+  const target = course.locked
+    ? all.find((l) => !l.locked)?.id
+    : finished
+      ? all[0]?.id
+      : nextLessonId;
   const cta = finished ? t("course.review") : completed > 0 || lastLessonId ? t("course.continue") : t("course.start");
   const nextTitle = course.sections.flatMap((s) => s.lessons).find((l) => l.id === target)?.title;
 
@@ -51,6 +59,7 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
           {course.name}
         </h1>
         <div className="flex-1" />
+        {channel && <AccessToggle channel={channel} />}
         {canEdit && (
           <Button variant={editing ? "primary" : "ghost"} onClick={() => setEditing((e) => !e)} className="py-1">
             {editing ? t("course.doneEditing") : `✏️ ${t("course.edit")}`}
@@ -106,13 +115,14 @@ export function CourseView({ serverId, courseId }: { serverId: string; courseId:
                   </div>
                 )}
 
-                {target ? (
+                {course.locked && <LockedPanel serverId={serverId} channelId={course.id} className="bg-bg" />}
+                {course.locked && !target ? null : target ? (
                   <Link
                     href={`/s/${serverId}/${course.id}/${target}`}
                     className="flex w-full items-center justify-between gap-3 rounded-xl bg-brand px-5 py-4 text-white transition hover:bg-brand-hover"
                   >
                     <span>
-                      <span className="block text-lg font-bold">{cta}</span>
+                      <span className="block text-lg font-bold">{course.locked ? `👁 ${t("pay.freePreview")}` : cta}</span>
                       {nextTitle && !finished && (
                         <bdi className="block truncate text-sm opacity-90">{nextTitle}</bdi>
                       )}

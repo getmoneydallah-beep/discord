@@ -40,9 +40,10 @@ export default function ChannelScreen() {
   const uploads = useMobileUploader(serverId, "attachment");
   const canSend = (text.trim() || uploads.ready.length > 0) && !uploads.busy;
 
+  const locked = channel?.locked ?? false;
   useEffect(() => {
-    void actions.loadMessages(channelId);
-  }, [channelId]);
+    if (!locked) void actions.loadMessages(channelId).catch(() => undefined);
+  }, [channelId, locked]);
 
   // Inverted list: newest at the bottom, index 0 = newest.
   const items = useMemo(() => [...((data?.items ?? []) as PendingMessage[])].reverse(), [data?.items]);
@@ -114,6 +115,18 @@ export default function ChannelScreen() {
       ]);
     }
   }
+
+  // Paid channel without access. Per App Store rules the app never shows prices or links to buy.
+  if (locked)
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: channel ? `# ${channel.name}` : "" }} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl }}>
+          <T size={48}>🔒</T>
+          <T bold size={18}>{t("pay.subscribersOnly")}</T>
+        </View>
+      </Screen>
+    );
 
   return (
     <Screen>

@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import type { Channel, Course, Locale, Me, Member, Message, Role, Server, ServerEvent } from "@majlis/shared";
+import type { Channel, Course, Locale, Me, Member, Message, Offer, Role, Server, ServerEvent } from "@majlis/shared";
 import { newId } from "@majlis/shared";
 import { ApiClient, Gateway } from "./index";
 
@@ -45,6 +45,10 @@ export interface AppState {
   typing: Record<string, Record<string, { name: string; until: number }>>;
   /** Loaded courses by id (course id = channel id). */
   courses: Record<string, Course>;
+  /** Offers per server (what members can buy). */
+  offers: Record<string, Offer[]>;
+  /** Bumped when the viewer's access in a server changes, so open screens refetch. */
+  accessVersion: Record<string, number>;
   prefs: Preferences;
 }
 
@@ -74,6 +78,8 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
     online: {},
     typing: {},
     courses: {},
+    offers: {},
+    accessVersion: {},
     prefs: { locale: opts.defaultLocale ?? "ar", easternDigits: false },
   }));
   const set = store.setState;
@@ -179,8 +185,15 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
         patchServerState(e.d.serverId, (st) => ({ ...st, channels: st.channels.filter((c) => c.id !== e.d.id) }));
         break;
       case "CHANNEL_UPDATE":
-        patchServerState(e.d.serverId, (st) => ({ ...st, channels: st.channels.map((c) => (c.id === e.d.id ? e.d : c)) }));
+        // Broadcasts don't know each viewer's lock state; keep ours (ACCESS_UPDATE refreshes it).
+        patchServerState(e.d.serverId, (st) => ({
+          ...st,
+          channels: st.channels.map((c) => (c.id === e.d.id ? { ...e.d, locked: c.locked } : c)),
+        }));
         if (s.courses[e.d.id]) void actions.loadCourse(e.d.id);
+        break;
+      case "ACCESS_UPDATE":
+        void actions.refreshAccess(e.d.serverId).catch(() => undefined);
         break;
       case "COURSE_UPDATE":
         // Refetch only courses we're looking at; others load fresh when opened.
@@ -305,6 +318,29 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
           : [...get().servers, d.server],
       });
       return d;
+    },
+
+    async loadOffers(serverId: string) {
+      const offers = await api.listOffers(serverId);
+      set({ offers: { ...get().offers, [serverId]: offers } });
+      return offers;
+    },
+
+    /** Re-reads everything that depends on the viewer's access in a server. */
+    async refreshAccess(serverId: string) {
+      const before = new Map(get().serverState[serverId]?.channels.map((c) => [c.id, c.locked]));
+      const d = await actions.loadServer(serverId);
+      await actions.loadOffers(serverId).catch(() => undefined);
+      for (const c of d.channels) {
+        if (before.get(c.id) !== c.locked && get().messages[c.id]) {
+          if (c.locked) {
+            const { [c.id]: _, ...rest } = get().messages;
+            set({ messages: rest });
+          } else void actions.loadMessages(c.id, true).catch(() => undefined);
+        }
+        if (get().courses[c.id]) void actions.loadCourse(c.id).catch(() => undefined);
+      }
+      set({ accessVersion: { ...get().accessVersion, [serverId]: (get().accessVersion[serverId] ?? 0) + 1 } });
     },
 
     async createServer(name: string) {

@@ -1,4 +1,15 @@
 import type {
+  AdminPayoutRow,
+  BillingInfo,
+  BillingInterval,
+  CheckoutResponse,
+  Earnings,
+  Entitlement,
+  Offer,
+  OfferInput,
+  PaidTier,
+  Payout,
+  PayoutAccount,
   ApiErrorBody,
   Course,
   CourseSection,
@@ -122,6 +133,42 @@ export class ApiClient {
     this.request<void>("POST", `/messages/${messageId}/report`, { reason });
   search = (serverId: string, q: string) =>
     this.request<Message[]>("GET", `/servers/${serverId}/search?q=${encodeURIComponent(q)}`);
+
+  // Billing (teacher plans)
+  getBilling = () => this.request<BillingInfo>("GET", "/billing");
+  teacherCheckout = (tier: PaidTier, interval: BillingInterval) =>
+    this.request<CheckoutResponse>("POST", "/billing/checkout", { tier, interval });
+
+  // Offers and paid access
+  listOffers = (serverId: string) => this.request<Offer[]>("GET", `/servers/${serverId}/offers`);
+  createOffer = (serverId: string, input: OfferInput) => this.request<Offer>("POST", `/servers/${serverId}/offers`, input);
+  updateOffer = (offerId: string, input: Partial<OfferInput> & { active?: boolean }) =>
+    this.request<Offer>("PATCH", `/offers/${offerId}`, input);
+  deleteOffer = (offerId: string) => this.request<void>("DELETE", `/offers/${offerId}`);
+  offerCheckout = (offerId: string) => this.request<CheckoutResponse>("POST", `/offers/${offerId}/checkout`);
+  setChannelAccess = (channelId: string, access: "free" | "paid") =>
+    this.request<Channel>("PUT", `/channels/${channelId}/access`, { access });
+  setLessonPreview = (lessonId: string, freePreview: boolean) =>
+    this.request<Lesson>("PUT", `/lessons/${lessonId}/preview`, { freePreview });
+  listEntitlements = (serverId: string) => this.request<Entitlement[]>("GET", `/servers/${serverId}/entitlements`);
+  grantEntitlement = (serverId: string, userId: string, offerId: string) =>
+    this.request<Entitlement>("POST", `/servers/${serverId}/entitlements`, { userId, offerId });
+  revokeEntitlement = (id: string) => this.request<void>("DELETE", `/entitlements/${id}`);
+
+  // Earnings and payouts
+  getEarnings = () => this.request<Earnings>("GET", "/earnings");
+  setPayoutAccount = (whopUsername: string) => this.request<PayoutAccount>("PUT", "/earnings/payout-account", { whopUsername });
+  adminPayouts = () =>
+    this.request<{ rows: AdminPayoutRow[]; history: Payout[]; minPayoutMinor: number; holdDays: number }>("GET", "/admin/payouts");
+  markPaid = (input: { teacherId: string; currency: string; amountMinor: number; whopReference: string; note?: string }) =>
+    this.request<Payout>("POST", "/admin/payouts", input);
+  /** CSV as text (needs the auth header, so it can't be a plain link). */
+  async adminPayoutsCsv(): Promise<string> {
+    const token = this.opts.getToken();
+    const res = await fetch(`${this.baseUrl}/admin/payouts.csv`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, "csv_failed");
+    return res.text();
+  }
 
   // Uploads
   createUpload = (serverId: string, input: { filename: string; contentType: string; size: number; purpose: UploadPurpose }) =>

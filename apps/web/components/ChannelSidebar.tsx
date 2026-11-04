@@ -58,9 +58,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             )}
           >
             <span className="text-lg opacity-60">#</span>
-            <span className="truncate" dir="auto">
+            <span className="flex-1 truncate" dir="auto">
               {c.name}
             </span>
+            {c.access === "paid" && <span className={cx("text-xs", !c.locked && "opacity-50")}>🔒</span>}
           </Link>
         ))}
 
@@ -85,9 +86,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             )}
           >
             <span className="text-base">🎓</span>
-            <span className="truncate" dir="auto">
+            <span className="flex-1 truncate" dir="auto">
               {c.name}
             </span>
+            {c.access === "paid" && <span className={cx("text-xs", !c.locked && "opacity-50")}>🔒</span>}
           </Link>
         ))}
         {canManage && courses.length === 0 && (
@@ -99,6 +101,16 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
           </button>
         )}
       </div>
+
+      {canManage && (
+        <Link
+          href={`/s/${serverId}/offers`}
+          onClick={() => setNav(false)}
+          className="mx-2 mb-2 flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted hover:bg-surface hover:text-fg"
+        >
+          💳 <span>{t("pay.offers")}</span>
+        </Link>
+      )}
 
       {me && (
         <footer className="flex items-center gap-2 bg-rail/60 px-3 py-2">

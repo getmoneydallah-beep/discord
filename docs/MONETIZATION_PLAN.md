@@ -233,3 +233,26 @@ Phases 1 and 2 need nothing from Whop and can start immediately; phases 3–4 ru
 4. **Accountant:** VAT structure when Majlis collects payments on behalf of teachers (seller of record vs. agent), ZATCA invoices.
 5. **Teacher terms:** refund policy, hold period, payout schedule, prohibited content — I'll draft them in Arabic + English.
 6. **Logo / brand direction** for the landing page.
+
+---
+
+## 10. Status (phases 3 and 4 built, Whop sandbox)
+
+**Done:** teacher plans with tier limits; offers; free and paid channels and courses; free-preview lessons; manual grants; `canAccess` enforced everywhere (REST, search, signed lesson links, progress, gateway pushes); Whop checkout for plans and offers; webhook (signature check, at-most-once processing, retry on error); entitlements; append-only ledger (sale, Whop fee, Majlis fee, 14-day hold, refund, chargeback, payout); teacher Earnings page; owner Payouts page with CSV and "Mark paid". The sandbox webhook is registered at `https://majlis-sa-api.fly.dev/webhooks/whop` (pinned to API version `2026-10-28`).
+
+**Checked against the real sandbox** with headless-browser checkouts, with the real payment, membership and refund objects replayed into the API:
+- Checkout metadata is copied onto both the payment and the membership, and `checkout_configuration_id` is on the payment. The API also stores every checkout it creates, so a payment can be matched even without metadata.
+- `total` and `amount_after_fees` are in the plan currency. The sandbox fee on a 99 SAR sale was 7.33 SAR (about 7.4%).
+- Whop's **adaptive pricing** showed a SAR plan in USD to a US buyer. Majlis turns it off on its plans, so buyers pay the exact offer price.
+- A trial checkout creates a $0 payment, which must not count as a paid period. A one-time purchase's membership goes to `completed`, which must not revoke access.
+- Whop only accepts `https://` return URLs.
+- A refund through `POST /payments/{id}/refund` sends `refund.created` with status `succeeded`.
+
+**Decisions made while building (easy to change):**
+- Refunds and chargebacks reduce the *available* balance immediately, even while the sale is still on hold. This is the safer option for Majlis.
+- A refund returns Majlis's fee on the refunded part, but not Whop's processing fee.
+- A lapsed teacher's renewals still pay the Starter fee (5%), and new checkouts for their offers are paused.
+- Only the server owner manages offers, because the money is theirs. Admins can grant and revoke access.
+- Making a channel paid needs a tier that can sell.
+
+**Still to do:** run the payout step in production; nightly reconciliation against Whop; coupons (phase 5); the public sales page and landing page (phase 1).

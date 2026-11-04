@@ -1,5 +1,8 @@
 "use client";
 
+import { ApiError } from "@majlis/api-client";
+import { LockedPanel } from "../pay/shared";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,16 +26,23 @@ export function LessonView({ serverId, courseId, lessonId }: { serverId: string;
   const setNav = useUi((s) => s.setNav);
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const accessVersion = useApp((s) => s.accessVersion[serverId] ?? 0);
   const [showOutline, setShowOutline] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
 
   useEffect(() => {
     setLesson(null);
     setJustFinished(false);
-    api.getLesson(lessonId).then(setLesson, (e) => setError(errorMessage(e)));
+    setLocked(false);
+    setError(null);
+    api.getLesson(lessonId).then(setLesson, (e) => {
+      if (e instanceof ApiError && e.code === "locked") setLocked(true);
+      else setError(errorMessage(e));
+    });
     if (!course) void actions.loadCourse(courseId).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonId, courseId]);
+  }, [lessonId, courseId, accessVersion]);
 
   // Keep the completion state in sync with the course (e.g. toggled elsewhere).
   const summary = course?.sections.flatMap((s) => s.lessons).find((l) => l.id === lessonId);
@@ -54,6 +64,15 @@ export function LessonView({ serverId, courseId, lessonId }: { serverId: string;
   }
 
   if (error) return <div className="p-8 text-danger">{error}</div>;
+  if (locked)
+    return (
+      <div className="scroll-thin flex-1 overflow-y-auto p-4 md:p-10">
+        <Link href={`/s/${serverId}/${courseId}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-fg">
+          <span className="flip-rtl inline-block">←</span> {course?.name ?? t("course.back")}
+        </Link>
+        <LockedPanel serverId={serverId} channelId={courseId} />
+      </div>
+    );
 
   const embed = lesson?.videoUrl ? parseVideoEmbed(lesson.videoUrl) : null;
 

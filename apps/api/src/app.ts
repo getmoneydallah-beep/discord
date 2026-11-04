@@ -18,7 +18,7 @@ import { messageRoutes } from "./routes/messages";
 import { serverRoutes } from "./routes/servers";
 import { billingRoutes, whopWebhookRoutes } from "./routes/billing";
 import { createBilling } from "./billing";
-import { createWhop, type WhopApi } from "./whop";
+import { createWhop, WhopError, type WhopApi } from "./whop";
 
 export interface BuildOptions {
   sql: Sql;
@@ -66,6 +66,10 @@ export async function buildApp({
       return reply.code(400).send({ error: code, details: err.issues });
     }
     if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code });
+    if (err instanceof WhopError) {
+      req.log.error({ err }, "whop api error");
+      return reply.code(502).send({ error: "checkout_failed" });
+    }
     const status = (err as { statusCode?: number }).statusCode;
     if (status && status < 500) return reply.code(status).send({ error: "bad_request", message: (err as Error).message });
     req.log.error(err);

@@ -186,11 +186,16 @@ export function createBilling(deps: BillingDeps) {
     interval?: string;
   }) {
     const whop = requireWhop();
-    const checkout = await whop.createCheckout({
-      planId: input.planId,
-      metadata: { ...input.metadata, kind: input.kind, user_id: input.userId },
-      redirectUrl: input.redirectUrl,
-    });
+    const checkout = await whop
+      .createCheckout({
+        planId: input.planId,
+        metadata: { ...input.metadata, kind: input.kind, user_id: input.userId },
+        redirectUrl: input.redirectUrl,
+      })
+      .catch((err: unknown) => {
+        deps.log?.warn({ err }, "whop checkout failed");
+        throw new HttpError(502, "checkout_failed");
+      });
     if (!checkout.purchase_url) throw new HttpError(502, "checkout_failed");
     await sql`
       INSERT INTO checkout_sessions (id, kind, user_id, offer_id, tier, interval, whop_plan_id)
@@ -342,7 +347,7 @@ export function createBilling(deps: BillingDeps) {
         whop_membership_id = COALESCE(EXCLUDED.whop_membership_id, teacher_subscriptions.whop_membership_id),
         whop_plan_id = COALESCE(EXCLUDED.whop_plan_id, teacher_subscriptions.whop_plan_id),
         manage_url = COALESCE(EXCLUDED.manage_url, teacher_subscriptions.manage_url),
-        trial_ends_at = CASE WHEN EXCLUDED.status = 'trialing' THEN EXCLUDED.trial_ends_at ELSE teacher_subscriptions.trial_ends_at END,
+        trial_ends_at = COALESCE(EXCLUDED.trial_ends_at, teacher_subscriptions.trial_ends_at),
         current_period_end = COALESCE(EXCLUDED.current_period_end, teacher_subscriptions.current_period_end),
         cancel_at_period_end = EXCLUDED.cancel_at_period_end,
         updated_at = now()`;
@@ -368,7 +373,8 @@ export function createBilling(deps: BillingDeps) {
         INSERT INTO payments (id, kind, user_id, whop_membership_id, currency, total_minor, whop_fee_minor, status, raw)
         VALUES (${p.id}, 'teacher_subscription', ${r.userId}, ${p.membership_id}, ${currency}, ${total}, ${whopFee}, ${p.status}, ${sql.json(p as never)})
         ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, raw = EXCLUDED.raw, updated_at = now()`;
-      await upsertTeacherSubscription(r, { status: "active", membershipId: p.membership_id, planId });
+      // A $0 payment is the start of a free trial, not a paid period.
+      await upsertTeacherSubscription(r, { status: total > 0 ? "active" : "trialing", membershipId: p.membership_id, planId });
       return;
     }
 
@@ -400,9 +406,9 @@ export function createBilling(deps: BillingDeps) {
       await book(tx, { ...base, type: "platform_fee", amountMinor: -platformFee, ref: `platform_fee:${p.id}`, note: `${feeBps / 100}%` });
       await tx`
         INSERT INTO entitlements (id, user_id, offer_id, server_id, source, status, whop_membership_id)
-        VALUES (${newId()}, ${r.userId}, ${offer.id}, ${offer.serverId}, 'whop', 'active', ${p.membership_id})
+        VALUES (${newId()}, ${r.userId}, ${offer.id}, ${offer.serverId}, 'whop', ${total > 0 ? "active" : "trialing"}, ${p.membership_id})
         ON CONFLICT (user_id, offer_id) DO UPDATE SET
-          source = 'whop', status = 'active', ends_at = NULL,
+          source = 'whop', status = EXCLUDED.status, ends_at = NULL,
           whop_membership_id = COALESCE(EXCLUDED.whop_membership_id, entitlements.whop_membership_id),
           updated_at = now()`;
     });
@@ -474,7 +480,7 @@ export function createBilling(deps: BillingDeps) {
         await book(tx, { ...base, type: "refund", amountMinor: -amount, ref: `refund:${rf.id}` });
         // Majlis returns its fee on the refunded part; Whop's processing fee is not returned.
         const feeBack = Number(payment.totalMinor) > 0 ? Math.round((Number(payment.platformFeeMinor) * amount) / Number(payment.totalMinor)) : 0;
-        await book(tx, { ...base, type: "platform_fee", amountMinor: feeBack, ref: `refund_fee:${rf.id}`, note: "refund" });
+        await book(tx, { ...base, type: "platform_fee", amountMinor: feeBack, ref: `refund_fee:${rf.id}` });
       }
       return updated;
     });
@@ -490,12 +496,12 @@ export function createBilling(deps: BillingDeps) {
     const base = { teacherId: payment.teacherUserId, serverId: payment.serverId, currency: payment.currency, paymentId };
     if (type === "dispute.created" || (type === "dispute.updated" && d.status === "lost")) {
       await book(sql, { ...base, type: "chargeback", amountMinor: -amount, ref: `chargeback:${d.id}` });
-      if (d.fee) await book(sql, { ...base, type: "chargeback", amountMinor: -toMinor(d.fee), ref: `chargeback_fee:${d.id}`, note: "dispute fee" });
+      if (d.fee) await book(sql, { ...base, type: "chargeback", amountMinor: -toMinor(d.fee), ref: `chargeback_fee:${d.id}` });
       await revokeForPayment(payment);
     }
     if (type === "dispute.updated" && d.status === "won") {
       const [booked] = await sql`SELECT 1 FROM ledger_entries WHERE ref = ${"chargeback:" + d.id}`;
-      if (booked) await book(sql, { ...base, type: "adjustment", amountMinor: amount, ref: `chargeback_won:${d.id}`, note: "dispute won" });
+      if (booked) await book(sql, { ...base, type: "adjustment", amountMinor: amount, ref: `chargeback_won:${d.id}` });
     }
   }
 

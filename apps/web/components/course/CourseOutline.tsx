@@ -74,14 +74,15 @@ export function CourseOutline({
               {section.lessons.map((lesson) => {
                 counter++;
                 const current = lesson.id === currentLessonId;
+                const Row = lesson.locked ? "div" : Link;
                 return (
                   <li key={lesson.id}>
-                    <Link
+                    <Row
                       href={`/s/${serverId}/${course.id}/${lesson.id}`}
                       className={cx(
                         "flex items-center gap-3 px-4 transition-colors",
                         dense ? "py-2" : "py-3",
-                        current ? "bg-brand/10" : "hover:bg-surface-hover",
+                        lesson.locked ? "cursor-default opacity-60" : current ? "bg-brand/10" : "hover:bg-surface-hover",
                       )}
                     >
                       <LessonStatus lesson={lesson} index={counter} current={current} />
@@ -90,14 +91,18 @@ export function CourseOutline({
                         <span className="flex gap-2 text-xs text-muted">
                           {lesson.hasVideo && <span>▶ {t("course.video")}</span>}
                           {lesson.attachmentCount > 0 && <span>📎 {num(lesson.attachmentCount)}</span>}
+                          {lesson.freePreview && course.access === "paid" && (
+                            <span className="text-brand">👁 {t("pay.freePreview")}</span>
+                          )}
                         </span>
                       </span>
+                      {lesson.locked && <span className="shrink-0">🔒</span>}
                       {lesson.durationSeconds ? (
                         <span className="shrink-0 text-xs text-muted" dir="ltr">
                           {num(formatDuration(lesson.durationSeconds))}
                         </span>
                       ) : null}
-                    </Link>
+                    </Row>
                   </li>
                 );
               })}

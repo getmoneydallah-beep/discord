@@ -122,6 +122,7 @@ export default function ServerScreen() {
               <T bold style={{ flex: 1 }}>
                 {item.channel.name}
               </T>
+              {item.channel.locked && <T size={14}>🔒</T>}
               <T muted size={20}>{locale === "ar" ? "‹" : "›"}</T>
             </Pressable>
           ) : item.kind === "channel" ? (
@@ -140,6 +141,7 @@ export default function ServerScreen() {
                 #
               </T>
               <T style={{ flex: 1 }}>{item.channel.name}</T>
+              {item.channel.locked && <T size={14}>🔒</T>}
             </Pressable>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.sm, opacity: item.online ? 1 : 0.5 }}>
