@@ -8,7 +8,11 @@ import type { Ctx } from "./context";
 import type { Sql } from "./db";
 import { HttpError } from "./errors";
 import { registerGateway } from "./gateway";
+import { createFiles, startUploadGc } from "./files";
 import { createRepo } from "./repo";
+import { courseRoutes } from "./routes/courses";
+import { uploadRoutes } from "./routes/uploads";
+import { localStorage, r2Storage, type Storage } from "./storage";
 import { authRoutes } from "./routes/auth";
 import { messageRoutes } from "./routes/messages";
 import { serverRoutes } from "./routes/servers";
@@ -16,10 +20,17 @@ import { serverRoutes } from "./routes/servers";
 export interface BuildOptions {
   sql: Sql;
   bus?: Bus;
+  storage?: Storage;
   logger?: boolean;
 }
 
-export async function buildApp({ sql, bus = createBus(config.redisUrl), logger = true }: BuildOptions) {
+export function createStorage(): Storage {
+  return config.r2
+    ? r2Storage(config.r2)
+    : localStorage({ dir: config.storageDir, secret: config.jwtSecret, baseUrl: config.publicUrl });
+}
+
+export async function buildApp({ sql, bus = createBus(config.redisUrl), storage = createStorage(), logger = true }: BuildOptions) {
   const app = Fastify({
     logger: logger ? { level: config.isProd ? "info" : "debug" } : false,
     trustProxy: true, // behind Fly's proxy / Cloudflare
@@ -45,11 +56,14 @@ export async function buildApp({ sql, bus = createBus(config.redisUrl), logger =
     return reply.code(500).send({ error: "internal_error" });
   });
 
-  const repo = createRepo(sql);
+  const files = createFiles(sql, storage);
+  const repo = createRepo(sql, files);
   const gateway = registerGateway(app, { bus, repo });
   const ctx: Ctx = {
     sql,
     repo,
+    storage,
+    files,
     bus,
     gateway,
     webUrl: config.webUrl,
@@ -68,10 +82,27 @@ export async function buildApp({ sql, bus = createBus(config.redisUrl), logger =
   await app.register(async (scoped) => {
     messageRoutes(scoped, ctx);
   });
+  await app.register(async (scoped) => {
+    uploadRoutes(scoped, ctx);
+  });
+  await app.register(async (scoped) => {
+    courseRoutes(scoped, ctx);
+  });
+  if ("register" in storage) await (storage as ReturnType<typeof localStorage>).register(app);
+
+  const gc = startUploadGc(sql, storage, app.log);
+  app.decorate("uploadGc", gc);
 
   app.addHook("onClose", async () => {
+    gc.stop();
     await bus.close();
   });
 
   return app;
+}
+
+declare module "fastify" {
+  interface FastifyInstance {
+    uploadGc: ReturnType<typeof startUploadGc>;
+  }
 }

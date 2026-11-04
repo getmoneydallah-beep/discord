@@ -59,3 +59,33 @@ describe("permissions", () => {
     expect(outranks("admin", "admin")).toBe(false);
   });
 });
+
+import { findVideoEmbeds, fileKind, formatDuration, parseVideoEmbed } from "./media";
+
+describe("video embeds", () => {
+  it("parses YouTube variants", () => {
+    for (const u of [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10",
+      "https://youtu.be/dQw4w9WgXcQ",
+      "https://m.youtube.com/shorts/dQw4w9WgXcQ",
+      "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    ]) {
+      expect(parseVideoEmbed(u)?.id).toBe("dQw4w9WgXcQ");
+    }
+  });
+  it("parses Vimeo and rejects others", () => {
+    expect(parseVideoEmbed("https://vimeo.com/76979871")?.provider).toBe("vimeo");
+    expect(parseVideoEmbed("https://example.com/watch?v=dQw4w9WgXcQ")).toBeNull();
+    expect(parseVideoEmbed("not a url")).toBeNull();
+  });
+  it("finds embeds inside Arabic text", () => {
+    const e = findVideoEmbeds("شاهد هذا الدرس https://youtu.be/dQw4w9WgXcQ وهذا https://youtu.be/dQw4w9WgXcQ");
+    expect(e).toHaveLength(1);
+  });
+  it("formats", () => {
+    expect(fileKind("video/mp4")).toBe("video");
+    expect(fileKind("application/pdf")).toBe("file");
+    expect(formatDuration(247)).toBe("4:07");
+    expect(formatDuration(3909)).toBe("1:05:09");
+  });
+});

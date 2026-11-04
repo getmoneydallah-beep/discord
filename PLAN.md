@@ -156,7 +156,11 @@ majlis/                     (pnpm + Turborepo monorepo)
 - [x] Phase 2: real-time gateway, messages, edit and delete, replies, reactions, typing, presence, Arabic search
 - [x] Phase 3 (part): Expo app with auth, servers, channels, chat, invite deep links and settings. The iOS and Android JS bundles build.
 - [x] Phase 4 (part): roles, kick, ban, reports, account deletion, rate limits
-- [ ] Attachments (Cloudflare R2 presigned uploads)
+- [x] Attachments: signed uploads straight to Cloudflare R2, inline images and video, file cards, YouTube/Vimeo embeds
+- [x] Courses: unlimited per server; sections, lessons (R2 video or embed, notes, files), per-user progress, resume, auto-complete; editor on web; learner screens on web and mobile
+- [ ] Course editing on mobile
+- [ ] Resumable multipart uploads for very large videos, and adaptive streaming (HLS via Cloudflare Stream) for slow connections
+- [ ] Draft (unpublished) lessons, quizzes, and a certificate when a course is finished
 - [ ] Push notifications (Expo, APNs and FCM)
 - [ ] Direct messages
 - [ ] Phone OTP login (Saudi SMS provider)

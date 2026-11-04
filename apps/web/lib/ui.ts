@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-type ModalName = "createServer" | "joinServer" | "invite" | "settings" | "createChannel" | null;
+type ModalName = "createServer" | "joinServer" | "invite" | "settings" | "createChannel" | "createCourse" | null;
 
 /** Local UI state (not shared with mobile). */
 export const useUi = create<{

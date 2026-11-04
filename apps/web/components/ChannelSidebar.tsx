@@ -20,6 +20,8 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
 
   if (!st || !server) return null;
   const textChannels = st.channels.filter((c) => c.type === "text");
+  const courses = st.channels.filter((c) => c.type === "course");
+  const canManage = can(st.myRole, "channel.manage");
 
   return (
     <aside
@@ -61,6 +63,41 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             </span>
           </Link>
         ))}
+
+        {(courses.length > 0 || canManage) && (
+          <div className="flex items-center justify-between px-2 pb-1 pt-4 text-xs font-semibold uppercase text-muted">
+            <span>{t("course.courses")}</span>
+            {canManage && (
+              <button onClick={() => openModal("createCourse")} title={t("course.create")} className="text-base hover:text-fg">
+                +
+              </button>
+            )}
+          </div>
+        )}
+        {courses.map((c) => (
+          <Link
+            key={c.id}
+            href={`/s/${serverId}/${c.id}`}
+            onClick={() => setNav(false)}
+            className={cx(
+              "flex items-center gap-1.5 rounded-md px-2 py-1.5",
+              c.id === channelId ? "bg-surface-hover text-fg" : "text-muted hover:bg-surface hover:text-fg",
+            )}
+          >
+            <span className="text-base">🎓</span>
+            <span className="truncate" dir="auto">
+              {c.name}
+            </span>
+          </Link>
+        ))}
+        {canManage && courses.length === 0 && (
+          <button
+            onClick={() => openModal("createCourse")}
+            className="mx-2 mt-1 w-[calc(100%-1rem)] rounded-md border border-dashed border-line px-2 py-2 text-start text-sm text-muted hover:border-brand hover:text-brand"
+          >
+            + {t("course.create")}
+          </button>
+        )}
       </div>
 
       {me && (

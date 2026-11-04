@@ -1,6 +1,7 @@
 import type { Channel, Me, Member, Message, Role, Server, User } from "@majlis/shared";
 import type { Sql } from "./db";
 import { forbidden, notFound } from "./errors";
+import { uploadJson, type Files, type UploadRow } from "./files";
 
 /* ----------------------------- serializers ----------------------------- */
 
@@ -57,11 +58,12 @@ const toMessage = (r: Row): Message => ({
   createdAt: iso(r.createdAt)!,
   author: { id: r.authorId, username: r.authorUsername, displayName: r.authorDisplayName, avatarUrl: r.authorAvatarUrl ?? null },
   reactions: r.reactions ?? [],
+  attachments: [],
 });
 
 /* ------------------------------ queries ------------------------------- */
 
-export function createRepo(sql: Sql) {
+export function createRepo(sql: Sql, files: Files) {
   async function membership(serverId: string, userId: string): Promise<Role | null> {
     const [row] = await sql<{ role: Role }[]>`
       SELECT role FROM server_members WHERE server_id = ${serverId} AND user_id = ${userId}`;
@@ -150,7 +152,12 @@ export function createRepo(sql: Sql) {
                  SELECT emoji, count(*)::int AS cnt, bool_or(user_id = ${viewerId}) AS me, min(created_at) AS first
                  FROM reactions WHERE message_id = m.id GROUP BY emoji
                ) r
-             ), '[]'::json) AS reactions
+             ), '[]'::json) AS reactions,
+             COALESCE((
+               SELECT json_agg(${sql.unsafe(uploadJson)} ORDER BY ma.position)
+               FROM message_attachments ma JOIN uploads u ON u.id = ma.upload_id
+               WHERE ma.message_id = m.id
+             ), '[]'::json) AS attachments
       FROM messages m
       JOIN channels c ON c.id = m.channel_id
       JOIN users u ON u.id = m.author_id
@@ -160,7 +167,12 @@ export function createRepo(sql: Sql) {
         ${before ? sql`AND m.id < ${before}` : sql``}
       ORDER BY m.id DESC
       LIMIT ${limit}`;
-    return rows.map(toMessage).reverse();
+    return Promise.all(
+      rows.map(async (r) => ({
+        ...toMessage(r),
+        attachments: await Promise.all((r.attachments as UploadRow[]).map(files.toAttachment)),
+      })),
+    ).then((list) => list.reverse());
   }
 
   async function message(id: string, viewerId: string): Promise<Message> {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ATTACHMENTS, UPLOAD_LIMITS, type UploadPurpose } from "./media";
 
 export const LOCALES = ["ar", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -6,7 +7,7 @@ export type Locale = (typeof LOCALES)[number];
 export const ROLES = ["owner", "admin", "member"] as const;
 export type Role = (typeof ROLES)[number];
 
-export const CHANNEL_TYPES = ["text", "category"] as const;
+export const CHANNEL_TYPES = ["text", "category", "course"] as const;
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
 
 // Usernames: Latin letters, digits, underscore and dot (handles must be typeable
@@ -47,10 +48,14 @@ export const createChannelSchema = z.object({
   type: z.enum(CHANNEL_TYPES).default("text"),
   parentId: z.string().nullable().optional(),
   topic: z.string().trim().max(1024).optional(),
+  /** Course channels only. */
+  description: z.string().trim().max(5000).optional(),
 });
 
 export const sendMessageSchema = z.object({
-  content: z.string().trim().min(1).max(4000),
+  // May be empty when the message only carries attachments.
+  content: z.string().trim().max(4000).default(""),
+  attachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS).default([]),
   replyToId: z.string().nullable().optional(),
   // Client-generated id so optimistic messages can be matched to the server echo.
   nonce: z.string().max(64).optional(),
@@ -75,3 +80,64 @@ export const setRoleSchema = z.object({
 
 /** Emoji reactions: a single grapheme up to a modest byte length. */
 export const emojiSchema = z.string().min(1).max(32);
+
+/* -------------------------------- uploads -------------------------------- */
+
+export const UPLOAD_PURPOSES = Object.keys(UPLOAD_LIMITS) as UploadPurpose[];
+
+export const createUploadSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  contentType: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/, "invalid_content_type")
+    .default("application/octet-stream"),
+  size: z.number().int().positive(),
+  purpose: z.enum(UPLOAD_PURPOSES as [UploadPurpose, ...UploadPurpose[]]),
+});
+
+/* -------------------------------- courses -------------------------------- */
+
+export const createCourseSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(5000).optional(),
+});
+
+export const updateCourseSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().trim().max(5000).optional(),
+  coverUploadId: z.string().nullable().optional(),
+});
+
+export const sectionSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+});
+
+export const lessonSchema = z.object({
+  sectionId: z.string(),
+  title: z.string().trim().min(1).max(200),
+  body: z.string().max(20000).default(""),
+  /** Uploaded video (R2) … */
+  videoUploadId: z.string().nullable().optional(),
+  /** … or an embedded YouTube / Vimeo link. */
+  videoUrl: z.string().url().max(500).nullable().optional(),
+  durationSeconds: z.number().int().min(0).max(24 * 3600).nullable().optional(),
+  attachmentIds: z.array(z.string()).max(20).default([]),
+});
+
+export const updateLessonSchema = lessonSchema.partial().extend({
+  attachmentIds: z.array(z.string()).max(20).optional(),
+});
+
+export const courseOrderSchema = z.object({
+  sections: z
+    .array(z.object({ id: z.string(), lessonIds: z.array(z.string()).max(1000) }))
+    .max(200),
+});
+
+export const progressSchema = z.object({
+  completed: z.boolean().optional(),
+  positionSeconds: z.number().min(0).max(24 * 3600).optional(),
+  durationSeconds: z.number().min(0).max(24 * 3600).optional(),
+});

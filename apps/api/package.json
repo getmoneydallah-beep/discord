@@ -15,6 +15,7 @@
     "@fastify/cors": "^11.4.0",
     "@fastify/websocket": "^11.3.6",
     "@majlis/shared": "workspace:*",
+    "aws4fetch": "^1.0.20",
     "fastify": "^5.12.8",
     "ioredis": "^5.11.1",
     "jose": "^6.2.15",

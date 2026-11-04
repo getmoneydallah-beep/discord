@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://majlis.app", "https://www.majlis.app", "http://localhost:3000"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["content-type"],
+    "ExposeHeaders": ["etag", "content-length", "content-range"],
+    "MaxAgeSeconds": 86400
+  }
+]

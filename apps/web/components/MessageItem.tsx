@@ -1,11 +1,12 @@
 "use client";
 
 import { memo, useState } from "react";
-import { can, toEasternDigits, type Message } from "@majlis/shared";
+import { can, findVideoEmbeds, toEasternDigits, type Message } from "@majlis/shared";
 import type { PendingMessage } from "@majlis/api-client/store";
 import { formatDate, formatTime } from "@majlis/i18n";
 import { actions, api, errorMessage, useApp, useT } from "@/lib/store";
 import { Avatar, cx } from "./ui";
+import { Attachments, EmbedFrame } from "./media";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🤲", "🔥", "✅"];
 
@@ -118,10 +119,18 @@ export const MessageItem = memo(function MessageItem(props: {
           </div>
         ) : (
           // dir="auto" + unicode-bidi: plaintext → each message/paragraph picks its own direction.
-          <div dir="auto" className={cx("bidi", m.failed && "text-danger")}>
-            {eastern ? toEasternDigits(m.content) : m.content}
-            {m.editedAt && <span className="ms-1 text-[10px] text-muted">{t("message.edited")}</span>}
-          </div>
+          <>
+            {(m.content || m.editedAt) && (
+              <div dir="auto" className={cx("bidi", m.failed && "text-danger")}>
+                <Linkified text={eastern ? toEasternDigits(m.content) : m.content} />
+                {m.editedAt && <span className="ms-1 text-[10px] text-muted">{t("message.edited")}</span>}
+              </div>
+            )}
+            <Attachments items={m.attachments ?? []} compact />
+            {findVideoEmbeds(m.content).map((e) => (
+              <EmbedFrame key={e.embedUrl} embed={e} className="mt-2 max-w-lg" />
+            ))}
+          </>
         )}
 
         {m.reactions.length > 0 && (
@@ -189,6 +198,26 @@ export const MessageItem = memo(function MessageItem(props: {
     </div>
   );
 });
+
+const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
+
+/** Makes URLs clickable without using dangerouslySetInnerHTML. */
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(URL_RE);
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-brand hover:underline" dir="ltr">
+            {p}
+          </a>
+        ) : (
+          p
+        ),
+      )}
+    </>
+  );
+}
 
 function ToolButton({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: () => void }) {
   return (

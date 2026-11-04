@@ -27,8 +27,13 @@ The web and mobile apps share the same API client and the same state store (`@ma
 - Reporting messages, and deleting your own account. Both app stores require these.
 - RTL by default with an English toggle. Each message chooses its own text direction. Optional Eastern Arabic digits (١٢٣). Dates use the Gregorian calendar, with Hijri formatting available.
 - Rate limits on sign-in and on sending messages.
+- **Files in chat:** attach images, videos and any other file. You can use the + button, drag and drop, or paste a screenshot, and each file shows upload progress. Images and videos play inline, other files show as download cards, and YouTube or Vimeo links become embedded players.
+- **Courses:** a channel type for teaching. Admins can create any number of courses per server. A course has a cover, a description and sections, and each section has lessons. A lesson has a video (uploaded to R2, or a YouTube/Vimeo link), notes, and downloadable files.
+  - **For learners:** a single "Start / Continue" button, a checklist with ✓ for finished lessons, and a progress bar. Videos resume where you stopped and complete the lesson automatically when they end. Every lesson ends with one big "I finished this lesson, next" button.
+  - **For admins:** an inline editor with up/down ordering (lessons can move between sections). Changes save immediately.
+  - On mobile, learners can do everything. Adding and editing lessons is web-only for now.
 
-**Not built yet:** attachments (R2), push notifications, DMs, phone OTP login, voice. See `PLAN.md`.
+**Not built yet:** push notifications, DMs, phone OTP login, voice, adaptive video streaming (HLS). See `PLAN.md`.
 
 ## Local development
 
@@ -81,6 +86,7 @@ The API tests start the real server and drive the REST API and the WebSocket gat
 | API + gateway | Fly.io `fra` | `fly deploy --config apps/api/fly.toml` from the repo root. Migrations run as the release command. |
 | Postgres | Neon `aws-eu-central-1` (Frankfurt) | Set `DATABASE_URL` with `fly secrets set` |
 | Redis | Upstash `eu-central-1` | Set `REDIS_URL` with `fly secrets set`. Required once you run more than one machine. |
+| Files and videos | Cloudflare R2 bucket `majlis-media` | Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` with `fly secrets set`. Apply the CORS policy in `infra/r2-cors.json`. |
 | Web | Vercel | Root directory `apps/web`, env `NEXT_PUBLIC_API_URL=https://api.majlis.app` |
 | iOS / Android | Expo EAS | `cd apps/mobile && eas build --profile production` then `eas submit` |
 
@@ -97,5 +103,20 @@ fly secrets set --app majlis-api DATABASE_URL=... REDIS_URL=... JWT_SECRET=$(ope
 ```bash
 fly deploy --config apps/api/fly.toml
 ```
+
+### Cloudflare R2 setup (files and course videos)
+
+1. In the Cloudflare dashboard, go to **R2** → **Create bucket**, name it `majlis-media` and choose location hint **Eastern Europe** or **Automatic**. Keep it **private**. The API hands out signed URLs that expire, so only members can open files.
+2. Go to **R2** → **Manage API tokens** → **Create token** with *Object Read & Write* permission on that bucket. Copy the Access Key ID, the Secret Access Key, and your Account ID.
+3. Open the bucket → **Settings** → **CORS policy**, and paste in `infra/r2-cors.json` with your real domains. This lets browsers upload straight to R2.
+4. Store the credentials as Fly secrets:
+
+```bash
+fly secrets set --app majlis-api R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_BUCKET=majlis-media
+```
+
+How it works: the app asks the API for a signed upload URL, sends the file **directly to R2** (the bytes never pass through Fly), then tells the API it's done. The API checks the file's real size. Every hour, files that nothing references any more (deleted messages, lessons or servers, abandoned uploads) are deleted from R2. Without `R2_*` set, development stores files on local disk in `apps/api/.uploads` using the same flow.
+
+Limits: chat attachments up to 100 MB; course videos up to 4 GB (R2's single upload limit is 5 GB); lesson files up to 200 MB. R2 charges nothing for downloads, so video views don't cost bandwidth.
 
 > **Saudi hosting note:** Fly.io has no region inside Saudi Arabia. Frankfurt is the closest well-connected option, about 80–120 ms from Riyadh and Jeddah. Read PLAN.md §4 before launch: the Saudi data-protection law (PDPL) may require keeping personal data in the Kingdom.

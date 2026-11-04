@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import type { Channel, Locale, Me, Member, Message, Role, Server, ServerEvent } from "@majlis/shared";
+import type { Channel, Course, Locale, Me, Member, Message, Role, Server, ServerEvent } from "@majlis/shared";
 import { newId } from "@majlis/shared";
 import { ApiClient, Gateway } from "./index";
 
@@ -43,6 +43,8 @@ export interface AppState {
   online: Record<string, true>;
   /** channelId → userId → { name, until } */
   typing: Record<string, Record<string, { name: string; until: number }>>;
+  /** Loaded courses by id (course id = channel id). */
+  courses: Record<string, Course>;
   prefs: Preferences;
 }
 
@@ -71,6 +73,7 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
     messages: {},
     online: {},
     typing: {},
+    courses: {},
     prefs: { locale: opts.defaultLocale ?? "ar", easternDigits: false },
   }));
   const set = store.setState;
@@ -175,6 +178,14 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
       case "CHANNEL_DELETE":
         patchServerState(e.d.serverId, (st) => ({ ...st, channels: st.channels.filter((c) => c.id !== e.d.id) }));
         break;
+      case "CHANNEL_UPDATE":
+        patchServerState(e.d.serverId, (st) => ({ ...st, channels: st.channels.map((c) => (c.id === e.d.id ? e.d : c)) }));
+        if (s.courses[e.d.id]) void actions.loadCourse(e.d.id);
+        break;
+      case "COURSE_UPDATE":
+        // Refetch only courses we're looking at; others load fresh when opened.
+        if (s.courses[e.d.courseId]) void actions.loadCourse(e.d.courseId).catch(() => undefined);
+        break;
       case "MEMBER_ADD":
         if (e.d.user.id === s.me?.id) {
           void actions.refresh();
@@ -260,7 +271,7 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
       gateway.disconnect();
       tokenRef = null;
       await storage.remove(TOKEN_KEY);
-      set({ status: "signedOut", token: null, me: null, servers: [], serverState: {}, messages: {}, online: {}, typing: {} });
+      set({ status: "signedOut", token: null, me: null, servers: [], serverState: {}, messages: {}, online: {}, typing: {}, courses: {} });
     },
 
     async deleteAccount() {
@@ -324,6 +335,11 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
       dropServer(serverId);
     },
 
+    /** Adds a channel returned by a REST call without waiting for the gateway echo. */
+    applyChannel(c: Channel) {
+      handleEvent({ t: "CHANNEL_CREATE", d: c });
+    },
+
     async createChannel(serverId: string, name: string) {
       const c = await api.createChannel(serverId, { name });
       handleEvent({ t: "CHANNEL_CREATE", d: c });
@@ -353,8 +369,53 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
       });
     },
 
+    async loadCourse(courseId: string) {
+      const course = await api.getCourse(courseId);
+      set({ courses: { ...get().courses, [courseId]: course } });
+      return course;
+    },
+
+    /** Saves progress and updates the cached course so checkmarks/progress bars move instantly. */
+    async setLessonCompleted(courseId: string, lessonId: string, completed: boolean) {
+      const c = get().courses[courseId];
+      if (c) {
+        let delta = 0;
+        const sections = c.sections.map((s) => ({
+          ...s,
+          lessons: s.lessons.map((l) => {
+            if (l.id !== lessonId || l.completed === completed) return l;
+            delta = completed ? 1 : -1;
+            return { ...l, completed };
+          }),
+        }));
+        const flat = sections.flatMap((s) => s.lessons);
+        set({
+          courses: {
+            ...get().courses,
+            [courseId]: {
+              ...c,
+              sections,
+              progress: {
+                ...c.progress,
+                completed: c.progress.completed + delta,
+                nextLessonId: (flat.find((l) => !l.completed) ?? flat[0])?.id ?? null,
+                lastLessonId: lessonId,
+              },
+            },
+          },
+        });
+      }
+      await api.saveProgress(lessonId, { completed });
+    },
+
     /** Optimistic send: shows the message immediately, reconciles via nonce. */
-    async sendMessage(channelId: string, serverId: string, content: string, replyToId?: string | null) {
+    async sendMessage(
+      channelId: string,
+      serverId: string,
+      content: string,
+      replyToId?: string | null,
+      attachments: import("@majlis/shared").Attachment[] = [],
+    ) {
       const me = get().me;
       if (!me) return;
       const nonce = newId();
@@ -369,11 +430,12 @@ export function createAppStore(opts: { baseUrl: string; storage: TokenStorage; d
         editedAt: null,
         createdAt: new Date().toISOString(),
         reactions: [],
+        attachments,
         pending: true,
       };
       patchChannelMessages(channelId, (items) => [...items, temp]);
       try {
-        const msg = await api.sendMessage(channelId, { content, replyToId, nonce });
+        const msg = await api.sendMessage(channelId, { content, replyToId, nonce, attachmentIds: attachments.map((a) => a.id) });
         patchChannelMessages(channelId, (items) => {
           const already = items.some((m) => m.id === msg.id);
           return already ? items.filter((m) => m.nonce !== nonce || m.id === msg.id) : items.map((m) => (m.nonce === nonce ? msg : m));

@@ -25,14 +25,32 @@ export function messageRoutes(app: FastifyInstance, ctx: Ctx) {
     if (channel.type !== "text" || !can(role, "message.send")) throw forbidden();
     sendLimit(req.userId);
     const input = sendMessageSchema.parse(req.body);
+    if (!input.content && input.attachmentIds.length === 0) throw badRequest("empty_message");
+    const uploads = await ctx.files.requireUploads(input.attachmentIds, {
+      serverId: channel.serverId,
+      purposes: ["attachment"],
+      ownerId: req.userId,
+    });
     if (input.replyToId) {
       const [parent] = await sql`SELECT channel_id FROM messages WHERE id = ${input.replyToId}`;
       if (!parent || parent.channelId !== channel.id) throw badRequest("invalid_reply");
     }
     const id = newId();
-    await sql`
-      INSERT INTO messages (id, channel_id, author_id, content, content_norm, reply_to_id)
-      VALUES (${id}, ${channel.id}, ${req.userId}, ${input.content}, ${normalizeArabic(input.content)}, ${input.replyToId ?? null})`;
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO messages (id, channel_id, author_id, content, content_norm, reply_to_id)
+        VALUES (${id}, ${channel.id}, ${req.userId}, ${input.content}, ${normalizeArabic(input.content)}, ${input.replyToId ?? null})`;
+      for (const [position, u] of uploads.entries()) {
+        // The primary key stops one upload being attached to two messages at once;
+        // the NOT EXISTS stops reuse across messages.
+        const inserted = await tx`
+          INSERT INTO message_attachments (message_id, upload_id, position)
+          SELECT ${id}, ${u.id}, ${position}
+          WHERE NOT EXISTS (SELECT 1 FROM message_attachments WHERE upload_id = ${u.id})
+          RETURNING 1`;
+        if (inserted.length === 0) throw badRequest("invalid_upload");
+      }
+    });
     const message = { ...(await repo.message(id, req.userId)), nonce: input.nonce };
     await emit({ serverIds: [channel.serverId] }, { t: "MESSAGE_CREATE", d: message });
     reply.code(201);

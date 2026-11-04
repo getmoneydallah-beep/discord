@@ -8,10 +8,12 @@ import { MemberList } from "@/components/MemberList";
 import { useUi } from "@/lib/ui";
 
 export default function ServerLayout({ children }: { children: React.ReactNode }) {
-  const { serverId } = useParams<{ serverId: string }>();
+  const { serverId, channelId } = useParams<{ serverId: string; channelId?: string }>();
   const loaded = useApp((s) => Boolean(s.serverState[serverId]));
   const isMember = useApp((s) => s.servers.some((x) => x.id === serverId));
   const membersOpen = useUi((s) => s.membersOpen);
+  // Courses get the full width; the member list only shows next to chat.
+  const isChat = useApp((s) => s.serverState[serverId]?.channels.find((c) => c.id === channelId)?.type === "text");
   const router = useRouter();
   const [failed, setFailed] = useState(false);
 
@@ -31,7 +33,7 @@ export default function ServerLayout({ children }: { children: React.ReactNode }
     <>
       <ChannelSidebar serverId={serverId} />
       <main className="flex min-w-0 flex-1 flex-col bg-bg">{children}</main>
-      {membersOpen && <MemberList serverId={serverId} />}
+      {membersOpen && isChat && <MemberList serverId={serverId} />}
     </>
   );
 }

@@ -5,7 +5,10 @@ import { can, colors, radii, spacing, type Channel, type Member } from "@majlis/
 import { actions, api, errorMessage, useApp, useT } from "@/store";
 import { Avatar, Screen, T, usePalette } from "@/ui";
 
-type Row = { kind: "channel"; channel: Channel } | { kind: "member"; member: Member; online: boolean };
+type Row =
+  | { kind: "channel"; channel: Channel }
+  | { kind: "course"; channel: Channel }
+  | { kind: "member"; member: Member; online: boolean };
 
 export default function ServerScreen() {
   const { serverId } = useLocalSearchParams<{ serverId: string }>();
@@ -15,6 +18,7 @@ export default function ServerScreen() {
   const server = useApp((s) => s.servers.find((x) => x.id === serverId));
   const st = useApp((s) => s.serverState[serverId]);
   const online = useApp((s) => s.online);
+  const locale = useApp((s) => s.prefs.locale);
 
   useEffect(() => {
     actions.loadServer(serverId).catch(() => router.back());
@@ -56,6 +60,14 @@ export default function ServerScreen() {
       title: t("channel.textChannels"),
       data: st.channels.filter((c) => c.type === "text").map((channel) => ({ kind: "channel", channel })),
     },
+    ...(st.channels.some((c) => c.type === "course")
+      ? [
+          {
+            title: t("course.courses"),
+            data: st.channels.filter((c) => c.type === "course").map((channel): Row => ({ kind: "course", channel })),
+          },
+        ]
+      : []),
     {
       title: `${t("server.members")} — ${st.members.length}`,
       data: [...st.members]
@@ -85,7 +97,7 @@ export default function ServerScreen() {
       />
       <SectionList
         sections={sections}
-        keyExtractor={(r) => (r.kind === "channel" ? r.channel.id : r.member.user.id)}
+        keyExtractor={(r) => (r.kind === "member" ? r.member.user.id : r.channel.id)}
         contentContainerStyle={{ padding: spacing.md }}
         renderSectionHeader={({ section }) => (
           <T muted bold size={12} style={{ marginTop: spacing.lg, marginBottom: spacing.xs, paddingHorizontal: spacing.sm }}>
@@ -93,7 +105,26 @@ export default function ServerScreen() {
           </T>
         )}
         renderItem={({ item }) =>
-          item.kind === "channel" ? (
+          item.kind === "course" ? (
+            <Pressable
+              onPress={() => router.push(`/course/${item.channel.id}?serverId=${serverId}`)}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+                padding: spacing.md,
+                marginVertical: 2,
+                borderRadius: radii.lg,
+                backgroundColor: pressed ? p.surfaceHover : p.surface,
+              })}
+            >
+              <T size={26}>🎓</T>
+              <T bold style={{ flex: 1 }}>
+                {item.channel.name}
+              </T>
+              <T muted size={20}>{locale === "ar" ? "‹" : "›"}</T>
+            </Pressable>
+          ) : item.kind === "channel" ? (
             <Pressable
               onPress={() => router.push(`/channel/${item.channel.id}?serverId=${serverId}`)}
               style={({ pressed }) => ({

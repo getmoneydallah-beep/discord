@@ -13,3 +13,4 @@ android/
 next-env.d.ts
 apps/mobile/dist/
 expo-env.d.ts
+.uploads/

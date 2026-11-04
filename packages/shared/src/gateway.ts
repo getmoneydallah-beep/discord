@@ -19,6 +19,9 @@ export type ServerEvent =
   | { t: "PRESENCE_UPDATE"; d: { userId: string; status: PresenceStatus } }
   | { t: "CHANNEL_CREATE"; d: Channel }
   | { t: "CHANNEL_DELETE"; d: { id: string; serverId: string } }
+  | { t: "CHANNEL_UPDATE"; d: Channel }
+  /** Course structure or content changed; clients refetch the course. */
+  | { t: "COURSE_UPDATE"; d: { courseId: string; serverId: string } }
   | { t: "MEMBER_ADD"; d: Member }
   | { t: "MEMBER_UPDATE"; d: Member }
   | { t: "MEMBER_REMOVE"; d: { serverId: string; userId: string } }

@@ -11,11 +11,12 @@ import {
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { can, colors, radii, spacing, toEasternDigits, type Message } from "@majlis/shared";
+import { can, colors, findVideoEmbeds, radii, spacing, toEasternDigits, type Message } from "@majlis/shared";
 import type { PendingMessage } from "@majlis/api-client/store";
 import { formatTime } from "@majlis/i18n";
 import { actions, api, errorMessage, useApp, useT } from "@/store";
 import { Avatar, Screen, T, usePalette } from "@/ui";
+import { Attachments, EmbedView, PendingChips, useMobileUploader } from "@/media";
 
 const QUICK = ["👍", "❤️", "😂", "🤲", "🔥"];
 
@@ -36,6 +37,8 @@ export default function ChannelScreen() {
   const [editing, setEditing] = useState<Message | null>(null);
   const lastTyping = useRef(0);
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const uploads = useMobileUploader(serverId, "attachment");
+  const canSend = (text.trim() || uploads.ready.length > 0) && !uploads.busy;
 
   useEffect(() => {
     void actions.loadMessages(channelId);
@@ -48,7 +51,9 @@ export default function ChannelScreen() {
 
   async function send() {
     const content = text.trim();
-    if (!content) return;
+    if (!canSend) return;
+    const attachments = uploads.ready;
+    uploads.clear();
     setText("");
     lastTyping.current = 0;
     try {
@@ -58,7 +63,7 @@ export default function ChannelScreen() {
       } else {
         const reply = replyTo?.id;
         setReplyTo(null);
-        await actions.sendMessage(channelId, serverId, content, reply);
+        await actions.sendMessage(channelId, serverId, content, reply, attachments);
       }
     } catch (err) {
       Alert.alert(errorMessage(err));
@@ -157,10 +162,18 @@ export default function ChannelScreen() {
                       </T>
                     </View>
                   )}
-                  <T style={m.failed ? { color: colors.danger } : undefined}>
-                    {eastern ? toEasternDigits(m.content) : m.content}
-                    {m.editedAt ? <T muted size={10}> {t("message.edited")}</T> : null}
-                  </T>
+                  {(m.content || m.editedAt) ? (
+                    <T style={m.failed ? { color: colors.danger } : undefined}>
+                      {eastern ? toEasternDigits(m.content) : m.content}
+                      {m.editedAt ? <T muted size={10}> {t("message.edited")}</T> : null}
+                    </T>
+                  ) : null}
+                  <Attachments items={m.attachments ?? []} />
+                  {findVideoEmbeds(m.content).slice(0, 1).map((e) => (
+                    <View key={e.embedUrl} style={{ marginTop: 6 }}>
+                      <EmbedView embed={e} />
+                    </View>
+                  ))}
                   {m.reactions.length > 0 && (
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
                       {m.reactions.map((r) => (
@@ -219,6 +232,7 @@ export default function ChannelScreen() {
           </View>
         )}
 
+        <PendingChips items={uploads.items} onRemove={uploads.remove} />
         <View
           style={{
             flexDirection: "row",
@@ -230,6 +244,13 @@ export default function ChannelScreen() {
             borderTopColor: p.border,
           }}
         >
+          <Pressable
+            onPress={() => void uploads.pick()}
+            accessibilityLabel={t("files.attach")}
+            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: p.surface, alignItems: "center", justifyContent: "center" }}
+          >
+            <T size={22}>＋</T>
+          </Pressable>
           <TextInput
             ref={input}
             value={text}
@@ -261,12 +282,12 @@ export default function ChannelScreen() {
           />
           <Pressable
             onPress={send}
-            disabled={!text.trim()}
+            disabled={!canSend}
             style={{
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: text.trim() ? colors.brand : p.surface,
+              backgroundColor: canSend ? colors.brand : p.surface,
               alignItems: "center",
               justifyContent: "center",
             }}

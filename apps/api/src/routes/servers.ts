@@ -88,10 +88,18 @@ export function serverRoutes(app: FastifyInstance, ctx: Ctx) {
     }
     const [{ next } = { next: 0 }] = await sql<{ next: number }[]>`
       SELECT COALESCE(MAX(position) + 1, 0)::int AS next FROM channels WHERE server_id = ${serverId}`;
-    const [row] = await sql`
-      INSERT INTO channels (id, server_id, name, type, parent_id, position, topic)
-      VALUES (${newId()}, ${serverId}, ${channelName(input.name)}, ${input.type}, ${input.parentId ?? null}, ${next}, ${input.topic ?? null})
-      RETURNING *`;
+    // Course names keep their spaces ("أساسيات التصميم"); chat channels use dashes.
+    const name = input.type === "course" ? input.name.trim().slice(0, 100) : channelName(input.name);
+    const row = await sql.begin(async (tx) => {
+      const [created] = await tx`
+        INSERT INTO channels (id, server_id, name, type, parent_id, position, topic)
+        VALUES (${newId()}, ${serverId}, ${name}, ${input.type}, ${input.parentId ?? null}, ${next}, ${input.topic ?? null})
+        RETURNING *`;
+      if (input.type === "course") {
+        await tx`INSERT INTO courses (id, description) VALUES (${created!.id}, ${input.description ?? ""})`;
+      }
+      return created;
+    });
     const channel = toChannel(row!);
     await emit({ serverIds: [serverId] }, { t: "CHANNEL_CREATE", d: channel });
     reply.code(201);

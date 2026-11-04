@@ -31,7 +31,13 @@ const config: ExpoConfig = {
     ],
   },
   locales: { ar: "./locales/ar.json", en: "./locales/en.json" },
-  plugins: ["expo-router", "expo-secure-store", "expo-localization"],
+  plugins: [
+    "expo-router",
+    "expo-secure-store",
+    "expo-localization",
+    ["expo-video", { supportsBackgroundPlayback: false, supportsPictureInPicture: true }],
+    ["expo-document-picker", { iCloudContainerEnvironment: "Production" }],
+  ],
   experiments: { typedRoutes: false },
   extra: {
     // Lets the app flip to RTL (I18nManager) for Arabic.

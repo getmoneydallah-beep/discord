@@ -1,5 +1,11 @@
 import type {
   ApiErrorBody,
+  Course,
+  CourseSection,
+  Lesson,
+  Upload,
+  UploadPurpose,
+  UploadTicket,
   AuthResponse,
   Channel,
   ClientEvent,
@@ -100,7 +106,10 @@ export class ApiClient {
     const qs = q.toString();
     return this.request<Message[]>("GET", `/channels/${channelId}/messages${qs ? `?${qs}` : ""}`);
   };
-  sendMessage = (channelId: string, input: { content: string; replyToId?: string | null; nonce?: string }) =>
+  sendMessage = (
+    channelId: string,
+    input: { content: string; replyToId?: string | null; nonce?: string; attachmentIds?: string[] },
+  ) =>
     this.request<Message>("POST", `/channels/${channelId}/messages`, input);
   editMessage = (messageId: string, content: string) =>
     this.request<Message>("PATCH", `/messages/${messageId}`, { content });
@@ -113,6 +122,97 @@ export class ApiClient {
     this.request<void>("POST", `/messages/${messageId}/report`, { reason });
   search = (serverId: string, q: string) =>
     this.request<Message[]>("GET", `/servers/${serverId}/search?q=${encodeURIComponent(q)}`);
+
+  // Uploads
+  createUpload = (serverId: string, input: { filename: string; contentType: string; size: number; purpose: UploadPurpose }) =>
+    this.request<UploadTicket>("POST", `/servers/${serverId}/uploads`, input);
+  completeUpload = (id: string) => this.request<Upload>("POST", `/uploads/${id}/complete`);
+  cancelUpload = (id: string) => this.request<void>("DELETE", `/uploads/${id}`);
+
+  /**
+   * Uploads a file straight to storage (R2) with progress, then confirms it.
+   * `body` is a Blob/File on web; on React Native pass `{ uri }` (see putFile).
+   */
+  async uploadFile(
+    serverId: string,
+    file: { name: string; type: string; size: number; body: Blob | { uri: string } },
+    purpose: UploadPurpose,
+    opts: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+  ): Promise<Upload> {
+    const ticket = await this.createUpload(serverId, {
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
+      size: file.size,
+      purpose,
+    });
+    try {
+      await putFile(ticket.put.url, ticket.put.headers, file.body, opts);
+      return await this.completeUpload(ticket.upload.id);
+    } catch (err) {
+      void this.cancelUpload(ticket.upload.id).catch(() => undefined);
+      throw err;
+    }
+  }
+
+  // Courses (a course is a channel with type "course")
+  createCourse = (serverId: string, input: { name: string; description?: string }) =>
+    this.request<Channel>("POST", `/servers/${serverId}/channels`, { ...input, type: "course" });
+  getCourse = (id: string) => this.request<Course>("GET", `/courses/${id}`);
+  updateCourse = (id: string, input: { name?: string; description?: string; coverUploadId?: string | null }) =>
+    this.request<Course>("PATCH", `/courses/${id}`, input);
+  createSection = (courseId: string, title: string) => this.request<CourseSection>("POST", `/courses/${courseId}/sections`, { title });
+  renameSection = (id: string, title: string) => this.request<void>("PATCH", `/sections/${id}`, { title });
+  deleteSection = (id: string) => this.request<void>("DELETE", `/sections/${id}`);
+  createLesson = (courseId: string, input: LessonInput & { sectionId: string; title: string }) =>
+    this.request<Lesson>("POST", `/courses/${courseId}/lessons`, input);
+  getLesson = (id: string) => this.request<Lesson>("GET", `/lessons/${id}`);
+  updateLesson = (id: string, input: LessonInput) => this.request<Lesson>("PATCH", `/lessons/${id}`, input);
+  deleteLesson = (id: string) => this.request<void>("DELETE", `/lessons/${id}`);
+  reorderCourse = (courseId: string, sections: { id: string; lessonIds: string[] }[]) =>
+    this.request<Course>("PUT", `/courses/${courseId}/order`, { sections });
+  saveProgress = (lessonId: string, input: { completed?: boolean; positionSeconds?: number; durationSeconds?: number }) =>
+    this.request<void>("PUT", `/lessons/${lessonId}/progress`, input);
+}
+
+export interface LessonInput {
+  sectionId?: string;
+  title?: string;
+  body?: string;
+  videoUploadId?: string | null;
+  videoUrl?: string | null;
+  durationSeconds?: number | null;
+  attachmentIds?: string[];
+}
+
+/**
+ * PUTs bytes with upload progress. XMLHttpRequest exists in browsers and in
+ * React Native, where a `{ uri }` body is read from disk as a Blob first.
+ */
+export function putFile(
+  url: string,
+  headers: Record<string, string>,
+  body: Blob | { uri: string },
+  opts: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+): Promise<void> {
+  // React Native: turn a local file URI into a native-backed Blob (not copied into JS memory).
+  if (!(typeof Blob !== "undefined" && body instanceof Blob) && "uri" in body) {
+    return fetch(body.uri)
+      .then((r) => r.blob())
+      .then((blob) => putFile(url, headers, blob, opts));
+  }
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) opts.onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new ApiError(xhr.status, "upload_failed")));
+    xhr.onerror = () => reject(new ApiError(0, "upload_failed"));
+    xhr.onabort = () => reject(new ApiError(0, "upload_cancelled"));
+    opts.signal?.addEventListener("abort", () => xhr.abort());
+    xhr.send(body as Blob);
+  });
 }
 
 type Listener = (event: ServerEvent) => void;

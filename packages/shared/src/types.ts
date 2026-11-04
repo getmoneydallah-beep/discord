@@ -1,3 +1,4 @@
+import type { FileKind, UploadPurpose } from "./media";
 import type { ChannelType, Locale, Role } from "./schemas";
 
 export interface User {
@@ -55,7 +56,86 @@ export interface Message {
   editedAt: string | null;
   createdAt: string;
   reactions: ReactionSummary[];
+  attachments: Attachment[];
   nonce?: string;
+}
+
+/** A stored file. `url` is a short-lived signed URL; refetch to renew. */
+export interface Attachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  kind: FileKind;
+  url: string;
+}
+
+export interface Upload extends Attachment {
+  purpose: UploadPurpose;
+  status: "pending" | "ready";
+}
+
+export interface UploadTicket {
+  upload: Upload;
+  /** PUT the raw file bytes here, with the given headers. */
+  put: { url: string; headers: Record<string, string> };
+}
+
+/* -------------------------------- courses -------------------------------- */
+
+export interface LessonSummary {
+  id: string;
+  sectionId: string;
+  title: string;
+  position: number;
+  durationSeconds: number | null;
+  hasVideo: boolean;
+  attachmentCount: number;
+  completed: boolean;
+}
+
+export interface CourseSection {
+  id: string;
+  title: string;
+  position: number;
+  lessons: LessonSummary[];
+}
+
+export interface CourseProgress {
+  completed: number;
+  total: number;
+  /** First lesson the viewer hasn't finished (or the first lesson). */
+  nextLessonId: string | null;
+  /** Most recently watched lesson, for "continue where you left off". */
+  lastLessonId: string | null;
+}
+
+export interface Course {
+  id: string; // same as the channel id
+  serverId: string;
+  name: string;
+  description: string;
+  cover: Attachment | null;
+  totalDurationSeconds: number;
+  sections: CourseSection[];
+  progress: CourseProgress;
+}
+
+export interface Lesson {
+  id: string;
+  courseId: string;
+  serverId: string;
+  sectionId: string;
+  title: string;
+  body: string;
+  video: Attachment | null;
+  videoUrl: string | null;
+  durationSeconds: number | null;
+  attachments: Attachment[];
+  completed: boolean;
+  positionSeconds: number;
+  prevLessonId: string | null;
+  nextLessonId: string | null;
 }
 
 export interface Invite {

@@ -16,6 +16,7 @@ export function Modals() {
       {modal === "joinServer" && <JoinServer onClose={close} />}
       {modal === "invite" && <InviteModal onClose={close} />}
       {modal === "createChannel" && <CreateChannel onClose={close} />}
+      {modal === "createCourse" && <CreateCourse onClose={close} />}
       {modal === "settings" && <Settings onClose={close} />}
     </>
   );
@@ -135,6 +136,45 @@ function CreateChannel({ onClose }: { onClose: () => void }) {
     <Modal open onClose={onClose} title={t("channel.create")}>
       <form onSubmit={onSubmit} className="space-y-4">
         <Input name="name" label={t("channel.name")} required maxLength={100} autoFocus dir="auto" />
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button disabled={busy}>{t("common.create")}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function CreateCourse({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const router = useRouter();
+  const { serverId } = useParams<{ serverId: string }>();
+  const { error, busy, onSubmit } = useSubmit(async (f) => {
+    const c = await api.createCourse(serverId, {
+      name: String(f.get("name")),
+      description: String(f.get("description") ?? ""),
+    });
+    actions.applyChannel(c);
+    onClose();
+    router.push(`/s/${serverId}/${c.id}?edit=1`);
+  });
+  return (
+    <Modal open onClose={onClose} title={t("course.create")}>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Input name="name" label={t("course.name")} required maxLength={100} autoFocus dir="auto" />
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">{t("course.description")}</span>
+          <textarea
+            name="description"
+            dir="auto"
+            rows={3}
+            maxLength={5000}
+            className="w-full rounded-lg border border-line bg-bg px-3 py-2 outline-none focus:border-brand"
+          />
+        </label>
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>

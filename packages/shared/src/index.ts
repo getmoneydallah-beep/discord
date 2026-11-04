@@ -5,3 +5,4 @@ export * from "./types";
 export * from "./gateway";
 export * from "./permissions";
 export * from "./tokens";
+export * from "./media";
